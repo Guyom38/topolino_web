@@ -7,34 +7,34 @@
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; touch-action: none;
             user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
-        body { background: #1a1a2e; color: #fff; font-family: 'Segoe UI', sans-serif;
+        body { background: #0d0f18; color: #fff; font-family: 'Segoe UI', sans-serif;
                overflow: hidden; width: 100vw; height: 100vh; }
 
         #landscape, #portrait { display: none; width: 100vw; height: 100vh; }
         @media (orientation: landscape) { #landscape { display: flex; } }
         @media (orientation: portrait)  { #portrait  { display: flex; } }
 
-        /* ════════════ PORTRAIT : Config + Caméra ════════════ */
+        /* ════════ PORTRAIT ════════ */
         #portrait {
             flex-direction: column; align-items: center;
             background: radial-gradient(ellipse at center, #1a1a3e 0%, #0d0d1a 100%);
             overflow-y: auto;
         }
         .step { display: none; flex-direction: column; align-items: center;
-                gap: 20px; padding: 28px 24px; width: 100%; max-width: 400px; }
+                gap: 18px; padding: 28px 20px; width: 100%; max-width: 400px; }
         .step.active { display: flex; }
         .step h2 { font-size: 22px; font-weight: 700; text-align: center; }
 
         .cfg-block { width: 100%; }
-        .cfg-block label { display: block; font-size: 12px; opacity: 0.55; margin-bottom: 8px;
-                           text-transform: uppercase; letter-spacing: .05em; }
+        .cfg-block label { display: block; font-size: 11px; opacity: 0.5; margin-bottom: 8px;
+                           text-transform: uppercase; letter-spacing: .06em; }
         .cfg-block input[type="text"] {
             width: 100%; padding: 13px 16px;
             background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.18);
             border-radius: 14px; color: white; font-size: 18px; outline: none;
         }
         #palette { display: flex; flex-wrap: wrap; gap: 10px; }
-        .swatch { width: 42px; height: 42px; border-radius: 50%; cursor: pointer;
+        .swatch { width: 40px; height: 40px; border-radius: 50%; cursor: pointer;
                   border: 3px solid transparent; transition: transform .1s, border-color .1s; }
         .swatch.on { border-color: #fff; transform: scale(1.25); }
 
@@ -42,229 +42,195 @@
             width: 100%; padding: 15px;
             background: linear-gradient(145deg, #7c3aed, #9b59b6);
             border: none; border-radius: 16px;
-            color: white; font-size: 18px; font-weight: 700; cursor: pointer;
+            color: white; font-size: 17px; font-weight: 700; cursor: pointer;
         }
         .btn-primary:active { filter: brightness(.8); }
         .btn-secondary {
-            width: 100%; padding: 12px;
-            background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.2);
-            border-radius: 16px; color: rgba(255,255,255,0.7); font-size: 15px;
+            width: 100%; padding: 11px;
+            background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.18);
+            border-radius: 14px; color: rgba(255,255,255,0.65); font-size: 14px;
             font-weight: 600; cursor: pointer;
         }
-        #portrait-status { font-size: 13px; opacity: 0.45; text-align: center; padding-bottom: 12px; }
+        #portrait-status { font-size: 13px; opacity: 0.4; text-align: center; }
 
-        /* Étape 2 : Caméra */
+        /* Caméra */
         #cam-container {
-            width: 200px; height: 200px; border-radius: 50%; overflow: hidden;
-            border: 5px solid rgba(255,255,255,0.3); position: relative;
-            background: #111; flex-shrink: 0;
+            width: 190px; height: 190px; border-radius: 50%; overflow: hidden;
+            border: 4px solid rgba(255,255,255,0.28); position: relative; background: #111;
         }
         #cam-container video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
         #cam-overlay {
             position: absolute; inset: 0; border-radius: 50%;
             background: rgba(0,0,0,0.45);
-            display: flex; align-items: center; justify-content: center;
-            pointer-events: none;
+            display: flex; align-items: center; justify-content: center; pointer-events: none;
         }
         #cam-overlay.hidden { display: none; }
-        #expr-label { font-size: 18px; font-weight: 700; text-align: center; }
-        #expr-hint  { font-size: 13px; opacity: 0.7; text-align: center; }
+        #expr-label { font-size: 17px; font-weight: 700; text-align: center; }
+        #expr-hint  { font-size: 12px; opacity: 0.65; text-align: center; }
         #btn-capture {
-            width: 68px; height: 68px; border-radius: 50%;
-            background: white; border: 5px solid rgba(255,255,255,0.4);
-            cursor: pointer; flex-shrink: 0;
-            box-shadow: 0 0 0 3px rgba(255,255,255,0.3);
+            width: 66px; height: 66px; border-radius: 50%;
+            background: white; border: 4px solid rgba(255,255,255,0.35);
+            cursor: pointer; box-shadow: 0 0 0 3px rgba(255,255,255,0.25);
         }
         #btn-capture:active { transform: scale(0.9); }
-        #thumbs { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+        #thumbs { display: flex; gap: 7px; flex-wrap: wrap; justify-content: center; }
         .thumb-slot {
-            width: 48px; height: 48px; border-radius: 50%; overflow: hidden;
-            border: 2px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05);
-            display: flex; align-items: center; justify-content: center;
-            font-size: 18px; flex-shrink: 0;
+            width: 46px; height: 46px; border-radius: 50%; overflow: hidden;
+            border: 2px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.04);
+            display: flex; align-items: center; justify-content: center; font-size: 17px;
         }
         .thumb-slot img { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
-        .thumb-slot.done { border-color: #4caf50; }
-        .thumb-slot.active { border-color: #fff; box-shadow: 0 0 0 3px rgba(255,255,255,0.4); }
-        #cam-progress { font-size: 13px; opacity: 0.6; text-align: center; }
-        #cam-no-access { font-size: 14px; opacity: 0.6; text-align: center; line-height: 1.6; display: none; }
+        .thumb-slot.done   { border-color: #4caf50; }
+        .thumb-slot.active { border-color: #fff; box-shadow: 0 0 0 2px rgba(255,255,255,0.4); }
+        #cam-progress { font-size: 12px; opacity: 0.55; text-align: center; }
+        #cam-no-access {
+            font-size: 13px; opacity: 0.6; text-align: center; line-height: 1.7;
+            display: none; padding: 8px 12px;
+            background: rgba(255,100,0,0.12); border-radius: 10px;
+        }
 
-        /* ════════════ LANDSCAPE : Manette SNES ════════════ */
+        /* ════════ LANDSCAPE : MANETTE ════════ */
         #landscape {
-            align-items: center; justify-content: center;
-            background: #111118; position: relative;
+            align-items: stretch; justify-content: stretch;
+            background: #0d0f18; padding: 8px; gap: 8px;
         }
 
-        /* ── Barre de modes (gauche) ── */
-        #mode-sidebar {
-            position: absolute; left: 5px; top: 50%; transform: translateY(-50%);
-            display: flex; flex-direction: column; gap: 5px; z-index: 10;
+        /* Zone joystick (gauche) */
+        #js-zone {
+            flex: 0 0 auto;
+            width: 44vw; max-width: 260px;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center; gap: 8px;
         }
-        .mode-ico {
-            width: 34px; height: 34px; border-radius: 8px;
-            border: 2px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.05);
-            color: #fff; font-size: 15px;
-            display: flex; align-items: center; justify-content: center;
-            cursor: pointer; transition: border-color .15s, background .15s;
+        #js-label {
+            font-size: 10px; font-weight: 700; color: rgba(255,255,255,0.3);
+            letter-spacing: 2px; text-transform: uppercase;
         }
-        .mode-ico:active { background: rgba(255,255,255,0.15); }
-        .mode-ico.active { border-color: #ffc800; background: rgba(255,200,0,0.18); }
-
-        /* ── Corps manette SNES ── */
-        #snes-body {
-            width: calc(100vw - 56px); max-width: 760px;
-            height: calc(100vh - 16px); max-height: 340px;
-            margin-left: 44px;
-            background: linear-gradient(175deg, #d8d8e4 0%, #bcbccc 40%, #c4c4d4 100%);
-            border-radius: 22px 22px 80px 80px;
-            border: 3px solid #8a8a9a;
-            display: flex; align-items: center; justify-content: space-between;
-            padding: 8px 24px;
+        #js-base {
             position: relative;
-            box-shadow: 0 6px 24px rgba(0,0,0,0.65),
-                        inset 0 2px 0 rgba(255,255,255,0.45),
-                        inset 0 -3px 6px rgba(0,0,0,0.12);
+            width: min(44vw, 220px); height: min(44vw, 220px);
+            max-width: 220px; max-height: 220px;
         }
-
-        /* Bandeau violet central */
-        #snes-body::before {
-            content: ''; position: absolute; top: 0; bottom: 0; left: 32%; right: 32%;
-            background: linear-gradient(180deg, rgba(88,55,140,0.12), rgba(120,80,180,0.08));
+        #js-ring {
+            position: absolute; inset: 0; border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.1);
+            background: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.04), transparent 70%);
+        }
+        /* Indicateur direction (arc lumineux) */
+        #js-ring::after {
+            content: ''; position: absolute; inset: 6px; border-radius: 50%;
+            border: 2px solid transparent;
+        }
+        #js-cross {
+            position: absolute; inset: 0;
+            display: flex; align-items: center; justify-content: center;
             pointer-events: none;
         }
+        #js-cross::before {
+            content: ''; position: absolute;
+            width: 1px; height: 60%; background: rgba(255,255,255,0.06);
+        }
+        #js-cross::after {
+            content: ''; position: absolute;
+            width: 60%; height: 1px; background: rgba(255,255,255,0.06);
+        }
+        #js-thumb {
+            position: absolute;
+            width: 64px; height: 64px; border-radius: 50%;
+            background: radial-gradient(circle at 38% 35%, #5a7fff, #2244cc);
+            top: 50%; left: 50%; transform: translate(-50%, -50%);
+            box-shadow: 0 4px 18px rgba(60,100,255,0.5), 0 0 0 3px rgba(100,140,255,0.2);
+            transition: box-shadow .1s;
+            pointer-events: none;
+        }
+        #js-thumb.active {
+            box-shadow: 0 4px 24px rgba(60,100,255,0.8), 0 0 0 4px rgba(100,140,255,0.4);
+        }
 
-        /* L/R triggers */
-        .trigger {
-            position: absolute; top: -12px;
-            width: 90px; height: 24px;
-            background: linear-gradient(180deg, #aaa, #c0c0c8);
-            border-radius: 14px 14px 0 0;
-            border: 2px solid #888; border-bottom: none;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 12px; font-weight: 800; color: #555;
-            cursor: pointer;
-        }
-        .trigger:active { background: #999; }
-        .trigger.left  { left: 30px; }
-        .trigger.right { right: 30px; }
-
-        /* ── D-pad ── */
-        #dpad {
-            width: 128px; height: 128px;
-            position: relative; flex-shrink: 0;
-        }
-        #dpad-touch {
-            position: absolute; inset: -22px;
-            border-radius: 50%; z-index: 5;
-        }
-        .dpad-h {
-            position: absolute; width: 128px; height: 42px;
-            top: 50%; left: 0; transform: translateY(-50%);
-            background: linear-gradient(180deg, #3a3a4a, #2a2a38);
-            border-radius: 8px;
-            box-shadow: inset 0 2px 0 rgba(255,255,255,0.08), 0 2px 6px rgba(0,0,0,0.4);
-        }
-        .dpad-v {
-            position: absolute; width: 42px; height: 128px;
-            left: 50%; top: 0; transform: translateX(-50%);
-            background: linear-gradient(90deg, #3a3a4a, #2a2a38);
-            border-radius: 8px;
-            box-shadow: inset 2px 0 0 rgba(255,255,255,0.08), 0 2px 6px rgba(0,0,0,0.4);
-        }
-        .dpad-dot {
-            width: 28px; height: 28px; position: absolute;
-            top: 50%; left: 50%; transform: translate(-50%,-50%);
-            background: #333346; border-radius: 50%; z-index: 2;
-        }
-        .dpad-arrow {
-            position: absolute; z-index: 3;
-            font-size: 15px; color: #666; line-height: 1;
-            transition: color .08s;
-        }
-        .dpad-arrow.up    { top: 6px;    left: 50%; transform: translateX(-50%); }
-        .dpad-arrow.down  { bottom: 6px; left: 50%; transform: translateX(-50%); }
-        .dpad-arrow.left  { left: 6px;   top: 50%; transform: translateY(-50%); }
-        .dpad-arrow.right { right: 6px;  top: 50%; transform: translateY(-50%); }
-        .dpad-arrow.on { color: #fff; text-shadow: 0 0 6px #fff; }
-
-        /* ── Zone centrale (avatar) ── */
-        #center-zone {
-            display: flex; flex-direction: column; align-items: center;
-            gap: 4px; z-index: 2; min-width: 110px;
+        /* Zone info centrale */
+        #info-zone {
+            flex: 1 1 0;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center; gap: 6px;
         }
         #avatar-circle {
-            width: 60px; height: 60px; border-radius: 50%;
-            border: 3px solid #7b5eaa; overflow: hidden;
-            background: #444;
+            width: 52px; height: 52px; border-radius: 50%;
+            border: 3px solid #5a7fff; overflow: hidden; background: #333;
         }
         #avatar-circle img { width: 100%; height: 100%; object-fit: cover; }
         #avatar-initial {
             width: 100%; height: 100%;
             display: flex; align-items: center; justify-content: center;
-            font-size: 26px; font-weight: 900; color: #fff;
+            font-size: 22px; font-weight: 900;
         }
-        #snes-player-name {
-            font-size: 11px; font-weight: 700; color: #333;
-            max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        #info-name {
+            font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.8);
+            max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            text-align: center;
         }
-        #connection-dot {
-            width: 8px; height: 8px; border-radius: 50%;
-            background: #d44; transition: background .3s;
+        #conn-dot {
+            width: 8px; height: 8px; border-radius: 50%; background: #c44;
         }
-        #connection-dot.ok { background: #4c4; }
-        #snes-sel-start {
-            display: flex; gap: 14px; margin-top: 2px;
-        }
-        .pill-btn {
-            padding: 3px 12px; background: #666;
-            border: none; border-radius: 10px;
-            color: #bbb; font-size: 8px; font-weight: 800;
-            letter-spacing: 1.5px; cursor: pointer;
-            box-shadow: inset 0 -2px 3px rgba(0,0,0,0.3);
-        }
-        .pill-btn:active { background: #555; }
+        #conn-dot.ok { background: #4c4; }
 
-        /* ── ABXY ── */
-        #abxy {
-            width: 128px; height: 128px;
-            position: relative; flex-shrink: 0;
+        /* Zone boutons (droite) */
+        #btn-zone {
+            flex: 0 0 auto;
+            width: 44vw; max-width: 260px;
+            display: grid;
+            grid-template-rows: 1fr 1fr;
+            grid-template-columns: 1fr auto;
+            gap: 8px;
+            padding: 2px;
         }
-        .abxy-btn {
-            position: absolute; width: 44px; height: 44px;
-            border-radius: 50%; border: 2px solid rgba(0,0,0,0.18);
-            font-size: 15px; font-weight: 900; color: rgba(255,255,255,0.92);
-            display: flex; align-items: center; justify-content: center;
-            cursor: pointer;
-            box-shadow: 0 3px 8px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.25);
-            transition: transform .06s;
-        }
-        .abxy-btn:active, .abxy-btn.pressed { box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
-        #btn-x { background: linear-gradient(145deg, #5577dd, #3355bb); top: 2px;    left: 50%; transform: translateX(-50%); }
-        #btn-a { background: linear-gradient(145deg, #dd4444, #bb2222); top: 50%;   right: 2px; transform: translateY(-50%); }
-        #btn-b { background: linear-gradient(145deg, #ddaa22, #bb8800); bottom: 2px; left: 50%; transform: translateX(-50%); }
-        #btn-y { background: linear-gradient(145deg, #44aa55, #228833); top: 50%;   left: 2px;  transform: translateY(-50%); }
-        #btn-x.pressed { transform: translateX(-50%) scale(0.88); }
-        #btn-a.pressed { transform: translateY(-50%) scale(0.88); }
-        #btn-b.pressed { transform: translateX(-50%) scale(0.88); }
-        #btn-y.pressed { transform: translateY(-50%) scale(0.88); }
 
-        /* Label boutons SNES */
-        .abxy-label {
-            position: absolute; font-size: 8px; font-weight: 700; color: #888;
-            pointer-events: none;
+        .game-btn {
+            border-radius: 16px; border: none;
+            font-size: 15px; font-weight: 900; letter-spacing: 1px;
+            color: white; cursor: pointer;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center; gap: 4px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+            -webkit-tap-highlight-color: transparent;
+            transition: filter .06s, transform .06s;
         }
-        .abxy-label.lx { top: -10px; left: 50%; transform: translateX(-50%); }
-        .abxy-label.la { top: 50%; right: -18px; transform: translateY(-50%); }
-        .abxy-label.lb { bottom: -10px; left: 50%; transform: translateX(-50%); }
-        .abxy-label.ly { top: 50%; left: -18px; transform: translateY(-50%); }
+        .game-btn:active, .game-btn.pressed {
+            filter: brightness(0.75); transform: scale(0.96);
+        }
+        .game-btn .btn-icon { font-size: 24px; line-height: 1; }
+        .game-btn .btn-text { font-size: 10px; letter-spacing: 2px; opacity: 0.85; }
+
+        /* AVANCER — grande, colonne 1, ligne 1+2 */
+        #btn-go {
+            grid-row: 1 / 2; grid-column: 1 / 2;
+            background: linear-gradient(160deg, #22c55e, #16a34a);
+            box-shadow: 0 4px 20px rgba(34,197,94,0.35);
+        }
+        #btn-go.pressed { box-shadow: 0 2px 8px rgba(34,197,94,0.2); }
+
+        /* RECULER — petite, colonne 1, ligne 2 */
+        #btn-rev {
+            grid-row: 2 / 3; grid-column: 1 / 2;
+            background: linear-gradient(160deg, #f59e0b, #d97706);
+            box-shadow: 0 4px 16px rgba(245,158,11,0.3);
+        }
+
+        /* FREIN — carré, colonne 2, lignes 1+2 */
+        #btn-hb {
+            grid-row: 1 / 3; grid-column: 2 / 3;
+            width: min(22vw, 110px);
+            background: linear-gradient(160deg, #ef4444, #b91c1c);
+            box-shadow: 0 4px 20px rgba(239,68,68,0.35);
+            border-radius: 20px;
+        }
+        #btn-hb.pressed { box-shadow: 0 2px 8px rgba(239,68,68,0.2); }
     </style>
 </head>
 <body>
 
-<!-- ════════════ PORTRAIT ════════════ -->
+<!-- ════════ PORTRAIT ════════ -->
 <div id="portrait">
 
-    <!-- Étape 1 : Nom + Couleur -->
     <div class="step active" id="step-config">
         <h2>🚗 Topolino</h2>
         <div class="cfg-block">
@@ -275,20 +241,19 @@
             <label>Couleur du véhicule</label>
             <div id="palette"></div>
         </div>
-        <button class="btn-primary" id="btn-next">Capturer mes expressions →</button>
-        <button class="btn-secondary" id="btn-skip-all">Rejoindre sans photo →</button>
+        <button class="btn-primary" id="btn-next">📸 Capturer mes expressions →</button>
+        <button class="btn-secondary" id="btn-skip-all">Rejoindre directement →</button>
         <div id="portrait-status"></div>
     </div>
 
-    <!-- Étape 2 : Capture des 6 expressions -->
     <div class="step" id="step-camera">
         <h2 id="expr-title">📸 Expression 1 / 6</h2>
         <div id="cam-container">
             <video id="cam-video" autoplay playsinline muted></video>
             <div id="cam-overlay">
-                <div style="text-align:center;padding:16px;">
-                    <div style="font-size:32px">📷</div>
-                    <div style="font-size:14px;margin-top:8px">Démarrage caméra…</div>
+                <div style="text-align:center;padding:16px">
+                    <div style="font-size:30px">📷</div>
+                    <div style="font-size:13px;margin-top:6px">Démarrage caméra…</div>
                 </div>
             </div>
         </div>
@@ -298,74 +263,57 @@
         <div id="thumbs"></div>
         <div id="cam-progress">0 / 6 capturées</div>
         <div id="cam-no-access">
-            Pas d'accès caméra (HTTPS requis).<br>Vous jouerez sans photo de profil.<br>
+            ⚠️ Caméra inaccessible (HTTP).<br>
+            Chrome Android : <b>chrome://flags</b><br>
+            → <i>Insecure origins treated as secure</i><br>
+            → Ajouter <b>http://192.168.1.50:5000</b>
         </div>
-        <button class="btn-primary" id="btn-join" style="display:none">Rejoindre la partie →</button>
+        <button class="btn-primary"   id="btn-join" style="display:none">Rejoindre la partie →</button>
         <button class="btn-secondary" id="btn-skip-cam">Passer sans photo</button>
     </div>
 
 </div>
 
-<!-- ════════════ LANDSCAPE : SNES ════════════ -->
+<!-- ════════ LANDSCAPE : MANETTE ════════ -->
 <div id="landscape">
 
-    <!-- Modes -->
-    <div id="mode-sidebar">
-        <div class="mode-ico" data-mode="drive"   title="Conduite">🏔</div>
-        <div class="mode-ico" data-mode="chase"   title="Poursuite">🧳</div>
-        <div class="mode-ico" data-mode="parking" title="Parking">🅿</div>
-        <div class="mode-ico" data-mode="tron"    title="Tron">🌀</div>
-        <div class="mode-ico" data-mode="derby"   title="Derby">💥</div>
-        <div class="mode-ico" data-mode="battle"  title="Battle">🎈</div>
-        <div class="mode-ico" data-mode="foot"    title="Foot">⚽</div>
-    </div>
-
-    <!-- Manette -->
-    <div id="snes-body">
-        <!-- L / R -->
-        <div class="trigger left"  id="trigger-l">L</div>
-        <div class="trigger right" id="trigger-r">R</div>
-
-        <!-- D-pad -->
-        <div id="dpad">
-            <div id="dpad-touch"></div>
-            <div class="dpad-h"></div>
-            <div class="dpad-v"></div>
-            <div class="dpad-dot"></div>
-            <span class="dpad-arrow up">▲</span>
-            <span class="dpad-arrow down">▼</span>
-            <span class="dpad-arrow left">◄</span>
-            <span class="dpad-arrow right">►</span>
-        </div>
-
-        <!-- Centre -->
-        <div id="center-zone">
-            <div id="avatar-circle">
-                <div id="avatar-initial">?</div>
-            </div>
-            <div id="snes-player-name">—</div>
-            <div id="connection-dot"></div>
-            <div id="snes-sel-start">
-                <button class="pill-btn" id="btn-select">SELECT</button>
-                <button class="pill-btn" id="btn-start">START</button>
-            </div>
-        </div>
-
-        <!-- ABXY -->
-        <div id="abxy">
-            <button class="abxy-btn" id="btn-x">X</button>
-            <button class="abxy-btn" id="btn-a">A</button>
-            <button class="abxy-btn" id="btn-b">B</button>
-            <button class="abxy-btn" id="btn-y">Y</button>
+    <!-- Joystick (direction) -->
+    <div id="js-zone">
+        <div id="js-label">DIRECTION</div>
+        <div id="js-base">
+            <div id="js-ring"></div>
+            <div id="js-cross"></div>
+            <div id="js-thumb"></div>
         </div>
     </div>
+
+    <!-- Avatar + infos -->
+    <div id="info-zone">
+        <div id="avatar-circle"><div id="avatar-initial">?</div></div>
+        <div id="info-name">—</div>
+        <div id="conn-dot"></div>
+    </div>
+
+    <!-- Boutons -->
+    <div id="btn-zone">
+        <button class="game-btn" id="btn-go">
+            <span class="btn-icon">▲</span>
+            <span class="btn-text">AVANCER</span>
+        </button>
+        <button class="game-btn" id="btn-rev">
+            <span class="btn-icon">▼</span>
+            <span class="btn-text">RECULER</span>
+        </button>
+        <button class="game-btn" id="btn-hb">
+            <span class="btn-icon">🅿</span>
+            <span class="btn-text">FREIN</span>
+        </button>
+    </div>
+
 </div>
 
 <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
 <script>
-// ═══════════════════════════════════════════════════════════════════════════════
-// CONSTANTES
-// ═══════════════════════════════════════════════════════════════════════════════
 const COLORS = [
     '#e74c3c','#e67e22','#f1c40f','#2ecc71','#1abc9c',
     '#3498db','#9b59b6','#e91e63','#ff5722','#00bcd4',
@@ -379,103 +327,81 @@ const EXPRESSIONS = [
     { label: '😤 Concentré',   hint: 'Intensément focalisé' },
     { label: '🏆 Victoire',    hint: 'Champion ! Célèbrez !' },
 ];
-const DEAD = 0.12;
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// PALETTE COULEURS
-// ═══════════════════════════════════════════════════════════════════════════════
+// ── Palette ───────────────────────────────────────────────────────────────────
 let selColor = COLORS[0];
-const paletteEl = document.getElementById('palette');
+document.getElementById('palette').innerHTML = '';
 COLORS.forEach(c => {
     const s = document.createElement('div');
     s.className = 'swatch' + (c === selColor ? ' on' : '');
     s.style.background = c;
     s.addEventListener('click', () => {
         document.querySelectorAll('.swatch').forEach(x => x.classList.remove('on'));
-        s.classList.add('on');
-        selColor = c;
+        s.classList.add('on'); selColor = c;
     });
-    paletteEl.appendChild(s);
+    document.getElementById('palette').appendChild(s);
 });
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// MINIATURES (6 slots caméra)
-// ═══════════════════════════════════════════════════════════════════════════════
+// ── Miniatures ────────────────────────────────────────────────────────────────
 const thumbsEl = document.getElementById('thumbs');
 const thumbSlots = [];
 EXPRESSIONS.forEach((_, i) => {
     const slot = document.createElement('div');
     slot.className = 'thumb-slot' + (i === 0 ? ' active' : '');
-    slot.textContent = (i + 1);
+    slot.textContent = i + 1;
     thumbsEl.appendChild(slot);
     thumbSlots.push(slot);
 });
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// NAVIGATION ÉTAPES
-// ═══════════════════════════════════════════════════════════════════════════════
+// ── Navigation ────────────────────────────────────────────────────────────────
 function goToStep(id) {
     document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
     document.getElementById(id).classList.add('active');
 }
+document.getElementById('btn-next').addEventListener('click', () => { goToStep('step-camera'); startCamera(); });
+document.getElementById('btn-skip-all').addEventListener('click', () => { capturedPhotos = []; joinGame(); });
 
-document.getElementById('btn-next').addEventListener('click', () => {
-    goToStep('step-camera');
-    startCamera();
-});
-
-document.getElementById('btn-skip-all').addEventListener('click', () => {
-    capturedPhotos = [];
-    joinGame();
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// CAMÉRA
-// ═══════════════════════════════════════════════════════════════════════════════
+// ── Caméra ────────────────────────────────────────────────────────────────────
 let videoStream = null;
-const videoEl = document.getElementById('cam-video');
-const overlay = document.getElementById('cam-overlay');
+const videoEl  = document.getElementById('cam-video');
+const overlay  = document.getElementById('cam-overlay');
 let capturedPhotos = [];
 let currentExpr = 0;
 
 async function startCamera() {
-    updateExpressionUI();
+    updateExprUI();
     try {
         videoStream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: 'user', width: { ideal: 240 }, height: { ideal: 240 } },
+            video: { facingMode: 'user', width: { ideal: 240 }, height: { ideal: 240 } }
         });
         videoEl.srcObject = videoStream;
         overlay.classList.add('hidden');
         document.getElementById('cam-no-access').style.display = 'none';
-    } catch (err) {
+    } catch {
         overlay.classList.add('hidden');
         document.getElementById('cam-no-access').style.display = 'block';
         document.getElementById('btn-capture').style.display = 'none';
         document.getElementById('btn-join').style.display = 'block';
     }
 }
+function stopCamera() { videoStream?.getTracks().forEach(t => t.stop()); videoStream = null; }
 
-function stopCamera() {
-    videoStream?.getTracks().forEach(t => t.stop());
-    videoStream = null;
-}
-
-function updateExpressionUI() {
-    const exp = EXPRESSIONS[currentExpr];
-    document.getElementById('expr-title').textContent = `📸 Expression ${currentExpr + 1} / 6`;
-    document.getElementById('expr-label').textContent = exp.label;
-    document.getElementById('expr-hint').textContent  = exp.hint;
-    document.getElementById('cam-progress').textContent = `${capturedPhotos.length} / 6 capturées`;
+function updateExprUI() {
+    const e = EXPRESSIONS[currentExpr];
+    document.getElementById('expr-title').textContent    = `📸 Expression ${currentExpr + 1} / 6`;
+    document.getElementById('expr-label').textContent    = e.label;
+    document.getElementById('expr-hint').textContent     = e.hint;
+    document.getElementById('cam-progress').textContent  = `${capturedPhotos.length} / 6 capturées`;
     thumbSlots.forEach((s, i) => s.classList.toggle('active', i === currentExpr && capturedPhotos.length < 6));
 }
 
 function capturePhoto() {
-    const cv = document.createElement('canvas'); cv.width = 96; cv.height = 96;
+    const cv = document.createElement('canvas'); cv.width = cv.height = 96;
     const ctx = cv.getContext('2d');
     ctx.save(); ctx.translate(96, 0); ctx.scale(-1, 1);
     const vw = videoEl.videoWidth || 240, vh = videoEl.videoHeight || 240;
-    const size = Math.min(vw, vh);
-    ctx.drawImage(videoEl, (vw - size) / 2, (vh - size) / 2, size, size, 0, 0, 96, 96);
+    const sz = Math.min(vw, vh);
+    ctx.drawImage(videoEl, (vw - sz) / 2, (vh - sz) / 2, sz, sz, 0, 0, 96, 96);
     ctx.restore();
     return cv.toDataURL('image/jpeg', 0.75);
 }
@@ -484,31 +410,24 @@ document.getElementById('btn-capture').addEventListener('click', () => {
     if (currentExpr >= 6) return;
     const dataUrl = videoEl.srcObject ? capturePhoto() : null;
     capturedPhotos.push(dataUrl);
-
     const slot = thumbSlots[currentExpr];
-    slot.textContent = '';
-    slot.classList.add('done');
-    if (dataUrl) {
-        const img = document.createElement('img'); img.src = dataUrl;
-        slot.appendChild(img);
-    } else { slot.textContent = '✓'; }
-
+    slot.textContent = ''; slot.classList.add('done');
+    if (dataUrl) { const img = document.createElement('img'); img.src = dataUrl; slot.appendChild(img); }
+    else slot.textContent = '✓';
     currentExpr++;
     if (currentExpr >= 6) {
         document.getElementById('btn-capture').style.display = 'none';
-        document.getElementById('btn-join').style.display = 'block';
-        document.getElementById('cam-progress').textContent = '6 / 6 — Prêt !';
+        document.getElementById('btn-join').style.display    = 'block';
+        document.getElementById('cam-progress').textContent  = '6 / 6 — Prêt !';
         thumbSlots.forEach(s => s.classList.remove('active'));
         stopCamera();
-    } else { updateExpressionUI(); }
+    } else updateExprUI();
 });
 
 document.getElementById('btn-skip-cam').addEventListener('click', () => { stopCamera(); capturedPhotos = []; joinGame(); });
 document.getElementById('btn-join').addEventListener('click', () => { stopCamera(); joinGame(); });
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// CONNEXION SOCKET
-// ═══════════════════════════════════════════════════════════════════════════════
+// ── Connexion ─────────────────────────────────────────────────────────────────
 let sock = null, joined = false;
 let playerName = 'Joueur', playerColor = COLORS[0];
 
@@ -517,10 +436,7 @@ function joinGame() {
     playerColor = selColor;
     if (sock) sock.disconnect();
     sock = io(window.location.origin);
-
-    sock.on('connect', () => {
-        sock.emit('register_mobile', { name: playerName, color: playerColor });
-    });
+    sock.on('connect', () => sock.emit('register_mobile', { name: playerName, color: playerColor }));
     sock.on('connect_error', err => {
         document.getElementById('portrait-status').textContent = '❌ ' + err.message;
         goToStep('step-config');
@@ -528,11 +444,10 @@ function joinGame() {
     sock.on('assigned', d => {
         joined = true;
         if (capturedPhotos.length > 0) sock.emit('player_photos', { photos: capturedPhotos });
-        // Landscape info
-        document.getElementById('snes-player-name').textContent = d.name;
-        document.getElementById('connection-dot').classList.add('ok');
+        document.getElementById('info-name').textContent = d.name;
+        document.getElementById('conn-dot').classList.add('ok');
+        document.getElementById('avatar-circle').style.borderColor = d.color;
         _setAvatar(d.color);
-        // Portrait info
         document.getElementById('portrait-status').textContent = '✅ Connecté ! Tournez en paysage.';
         startHB();
     });
@@ -540,167 +455,101 @@ function joinGame() {
         document.getElementById('portrait-status').textContent = '❌ Partie complète';
         goToStep('step-config');
     });
-    sock.on('current_mode', d => {
-        _highlightMode(d.mode);
-    });
-    sock.on('disconnect', () => {
-        document.getElementById('connection-dot').classList.remove('ok');
-        joined = false; stopHB();
-    });
+    sock.on('disconnect', () => { document.getElementById('conn-dot').classList.remove('ok'); joined = false; stopHB(); });
 }
 
 function _setAvatar(color) {
     const circle = document.getElementById('avatar-circle');
     circle.innerHTML = '';
     if (capturedPhotos.length > 0 && capturedPhotos[0]) {
-        const img = document.createElement('img');
-        img.src = capturedPhotos[0];
-        circle.appendChild(img);
+        const img = document.createElement('img'); img.src = capturedPhotos[0]; circle.appendChild(img);
     } else {
-        const ini = document.createElement('div');
-        ini.id = 'avatar-initial';
+        const ini = document.createElement('div'); ini.id = 'avatar-initial';
         ini.style.background = color;
+        ini.style.width = '100%'; ini.style.height = '100%';
+        ini.style.display = 'flex'; ini.style.alignItems = 'center'; ini.style.justifyContent = 'center';
+        ini.style.fontSize = '22px'; ini.style.fontWeight = '900';
         ini.textContent = (playerName[0] || '?').toUpperCase();
         circle.appendChild(ini);
     }
-    circle.style.borderColor = color;
 }
 
 let hbTimer = null;
 function startHB() { stopHB(); hbTimer = setInterval(() => sock && joined && sock.emit('heartbeat'), 5000); }
 function stopHB()  { if (hbTimer) { clearInterval(hbTimer); hbTimer = null; } }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// ENVOI INPUTS (30 fps)
-// ═══════════════════════════════════════════════════════════════════════════════
-let jx = 0, jy = 0;
+// ── État inputs ───────────────────────────────────────────────────────────────
+let jx = 0;           // steering (joystick uniquement)
+let goPressed  = false;
+let revPressed = false;
+let hbPressed  = false;
 
+function jy() {
+    if (goPressed  && !revPressed) return -1;
+    if (revPressed && !goPressed)  return  1;
+    return 0;
+}
+
+// Envoi 30 fps
 setInterval(() => {
-    if (sock && joined) sock.emit('input', { jx, jy });
+    if (sock && joined) sock.emit('input', { jx, jy: jy(), brake: hbPressed });
 }, 33);
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// D-PAD (touch analogique)
-// ═══════════════════════════════════════════════════════════════════════════════
-const dpadEl    = document.getElementById('dpad-touch');
-const arrowUp   = document.querySelector('.dpad-arrow.up');
-const arrowDown = document.querySelector('.dpad-arrow.down');
-const arrowL    = document.querySelector('.dpad-arrow.left');
-const arrowR    = document.querySelector('.dpad-arrow.right');
-let dpadTouchId = null;
-let dpadJx = 0, dpadJy = 0;
+// ── Joystick ──────────────────────────────────────────────────────────────────
+const jsBase  = document.getElementById('js-base');
+const jsThumb = document.getElementById('js-thumb');
+const DEAD = 0.12, MAX_R = 0.9;
+let jsTouchId = null;
 
-function dpadFromTouch(touch) {
-    const rect = document.getElementById('dpad').getBoundingClientRect();
-    const cx = rect.left + rect.width / 2;
-    const cy = rect.top + rect.height / 2;
-    let dx = touch.clientX - cx;
-    let dy = touch.clientY - cy;
-    const maxR = rect.width / 2;
+function jsUpdate(touch) {
+    const rect = jsBase.getBoundingClientRect();
+    const r    = rect.width / 2;
+    const cx   = rect.left + r, cy = rect.top + r;
+    let dx = touch.clientX - cx, dy = touch.clientY - cy;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist > maxR) { dx *= maxR / dist; dy *= maxR / dist; }
-    dpadJx = dx / maxR;
-    dpadJy = dy / maxR;
-    if (Math.abs(dpadJx) < DEAD) dpadJx = 0;
-    if (Math.abs(dpadJy) < DEAD) dpadJy = 0;
-    // Indicateurs visuels
-    arrowUp.classList.toggle('on', dpadJy < -0.3);
-    arrowDown.classList.toggle('on', dpadJy > 0.3);
-    arrowL.classList.toggle('on', dpadJx < -0.3);
-    arrowR.classList.toggle('on', dpadJx > 0.3);
-    _updateJxy();
+    const maxPx = r * MAX_R;
+    if (dist > maxPx) { dx *= maxPx / dist; dy *= maxPx / dist; }
+    jsThumb.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+    jsThumb.classList.add('active');
+    const raw = dx / maxPx;
+    jx = Math.abs(raw) < DEAD ? 0 : raw;
+}
+function jsReset() {
+    jsTouchId = null; jx = 0;
+    jsThumb.style.transform = 'translate(-50%, -50%)';
+    jsThumb.classList.remove('active');
 }
 
-function dpadReset() {
-    dpadJx = 0; dpadJy = 0; dpadTouchId = null;
-    arrowUp.classList.remove('on'); arrowDown.classList.remove('on');
-    arrowL.classList.remove('on');  arrowR.classList.remove('on');
-    _updateJxy();
-}
-
-dpadEl.addEventListener('touchstart', e => {
+jsBase.addEventListener('touchstart', e => {
     e.preventDefault();
     const t = e.changedTouches[0];
-    dpadTouchId = t.identifier;
-    dpadFromTouch(t);
+    jsTouchId = t.identifier;
+    jsUpdate(t);
 }, { passive: false });
-
-dpadEl.addEventListener('touchmove', e => {
+jsBase.addEventListener('touchmove', e => {
     e.preventDefault();
-    for (const t of e.changedTouches) {
-        if (t.identifier === dpadTouchId) { dpadFromTouch(t); break; }
-    }
+    for (const t of e.changedTouches) if (t.identifier === jsTouchId) { jsUpdate(t); break; }
 }, { passive: false });
-
-dpadEl.addEventListener('touchend', e => {
-    for (const t of e.changedTouches) {
-        if (t.identifier === dpadTouchId) { dpadReset(); break; }
-    }
+jsBase.addEventListener('touchend', e => {
+    for (const t of e.changedTouches) if (t.identifier === jsTouchId) { jsReset(); break; }
 }, { passive: false });
-dpadEl.addEventListener('touchcancel', () => dpadReset(), { passive: false });
+jsBase.addEventListener('touchcancel', jsReset, { passive: false });
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// ABXY + L/R (touche → jy override)
-// ═══════════════════════════════════════════════════════════════════════════════
-let btnA = false, btnB = false, btnL = false, btnR = false;
-
-function setupBtn(id, onDown, onUp) {
+// ── Boutons jeu ───────────────────────────────────────────────────────────────
+function setupGameBtn(id, onDown, onUp) {
     const el = document.getElementById(id);
     el.addEventListener('touchstart', e => { e.preventDefault(); el.classList.add('pressed'); onDown(); }, { passive: false });
-    el.addEventListener('touchend',   e => { e.preventDefault(); el.classList.remove('pressed'); onUp(); }, { passive: false });
-    el.addEventListener('touchcancel', () => { el.classList.remove('pressed'); onUp(); });
+    ['touchend', 'touchcancel'].forEach(ev =>
+        el.addEventListener(ev, e => { e.preventDefault(); el.classList.remove('pressed'); onUp(); }, { passive: false })
+    );
 }
+setupGameBtn('btn-go',  () => { goPressed  = true;  }, () => { goPressed  = false; });
+setupGameBtn('btn-rev', () => { revPressed = true;  }, () => { revPressed = false; });
+setupGameBtn('btn-hb',  () => { hbPressed  = true;  }, () => { hbPressed  = false; });
 
-// A (rouge, droite) = Accélérer
-setupBtn('btn-a', () => { btnA = true; _updateJxy(); }, () => { btnA = false; _updateJxy(); });
-// B (jaune, bas)    = Freiner
-setupBtn('btn-b', () => { btnB = true; _updateJxy(); }, () => { btnB = false; _updateJxy(); });
-// L trigger = Freiner
-setupBtn('trigger-l', () => { btnL = true; _updateJxy(); }, () => { btnL = false; _updateJxy(); });
-// R trigger = Accélérer
-setupBtn('trigger-r', () => { btnR = true; _updateJxy(); }, () => { btnR = false; _updateJxy(); });
-
-function _updateJxy() {
-    // Steering : toujours depuis le D-pad
-    jx = dpadJx;
-    // Accélération : A / R = forward (-1), B / L = brake (+1), sinon D-pad vertical
-    const accel = btnA || btnR;
-    const brake = btnB || btnL;
-    if (accel && !brake)      jy = -1;
-    else if (brake && !accel) jy = 1;
-    else if (accel && brake)  jy = 0;
-    else                      jy = dpadJy;
-}
-
-// X et Y : réservés pour actions futures (items, klaxon…)
-setupBtn('btn-x', () => {}, () => {});
-setupBtn('btn-y', () => {}, () => {});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// MODES
-// ═══════════════════════════════════════════════════════════════════════════════
-function _highlightMode(mode) {
-    document.querySelectorAll('.mode-ico').forEach(el => {
-        el.classList.toggle('active', el.dataset.mode === mode);
-    });
-}
-
-document.querySelectorAll('.mode-ico').forEach(el => {
-    el.addEventListener('click', () => {
-        if (!sock || !joined) return;
-        const mode = el.dataset.mode;
-        sock.emit('change_mode', { mode });
-        _highlightMode(mode);
-    });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// ORIENTATION RESET
-// ═══════════════════════════════════════════════════════════════════════════════
+// ── Reset orientation ─────────────────────────────────────────────────────────
 window.addEventListener('orientationchange', () => {
-    dpadReset();
-    btnA = false; btnB = false; btnL = false; btnR = false;
-    jx = 0; jy = 0;
+    jsReset(); goPressed = false; revPressed = false; hbPressed = false;
 });
 </script>
 </body>

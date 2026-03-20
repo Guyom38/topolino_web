@@ -58,11 +58,12 @@ function _connectToServer() {
             if (!p) return;
             const inp = d.inputs;
             const DZ  = 0.12;
-            p.keys.left     = inp.jx <  -DZ;
-            p.keys.right    = inp.jx >   DZ;
-            p.keys.up       = inp.jy < -DZ;
-            p.keys.down     = inp.jy >  DZ;
-            p.keys.jx       = inp.jx;   // analogique pour direction précise
+            p.keys.left      = inp.jx <  -DZ;
+            p.keys.right     = inp.jx >   DZ;
+            p.keys.up        = inp.jy < -DZ;
+            p.keys.down      = inp.jy >  DZ;
+            p.keys.jx        = inp.jx;
+            p.keys.handbrake = !!inp.brake;
         });
 
         sock.on('player_config', d => {

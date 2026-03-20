@@ -47,6 +47,11 @@ export function updatePhysics(p, terrainY, getY = undefined) {
         p.carAngle += (p.carSpeed * p.steeringAngle * (p.carSpeed > 0 ? 1 : -1)) / config.wheelBase;
     }
 
+    // --- Frein à main ---
+    if (keys.handbrake) {
+        p.carSpeed *= 0.82; // friction forte
+    }
+
     // --- Drift / grip ---
     const fwdX         = -Math.sin(p.carAngle);
     const fwdZ         = -Math.cos(p.carAngle);
@@ -54,9 +59,10 @@ export function updatePhysics(p, terrainY, getY = undefined) {
     const targetVel    = new THREE.Vector3(fwdX * p.carSpeed, 0, fwdZ * p.carSpeed);
     const speedRatio   = Math.abs(p.carSpeed) / config.maxSpeed;
     const cornerFactor = Math.abs(p.steeringAngle) * speedRatio * speedRatio;
+    const handbrakeMod = keys.handbrake ? 0.25 : 1.0; // perte d'adhérence = drift
     const actualGrip   = THREE.MathUtils.clamp(
-        (config.grip - Math.abs(p.carSpeed) * 0.10 - cornerFactor * 0.38) * slopeGrip,
-        0.55, 1.0
+        (config.grip - Math.abs(p.carSpeed) * 0.10 - cornerFactor * 0.38) * slopeGrip * handbrakeMod,
+        keys.handbrake ? 0.08 : 0.55, 1.0
     );
     p.velocity.lerp(targetVel, actualGrip);
 
