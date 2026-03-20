@@ -89,10 +89,23 @@
         }
     }
     </script>
+<script>
+    const mode = new URLSearchParams(location.search).get('mode') ?? 'drive';
+    document.getElementById('btn-' + mode)?.classList.add('active');
 
-    <script>
-        const mode = new URLSearchParams(location.search).get('mode') ?? 'drive';
-        document.getElementById('btn-' + mode)?.classList.add('active');
+    // Capture d'erreurs pour le debug
+    window.addEventListener('error', function(event) {
+        const errDiv = document.createElement('div');
+        errDiv.style.position = 'absolute';
+        errDiv.style.top = '50px';
+        errDiv.style.left = '50px';
+        errDiv.style.background = 'red';
+        errDiv.style.color = 'white';
+        errDiv.style.zIndex = '9999';
+        errDiv.innerText = event.message + ' at ' + event.filename + ':' + event.lineno;
+        document.body.appendChild(errDiv);
+        });
+
         function go(m) { window.location.href = '?mode=' + m; }
     </script>
 
