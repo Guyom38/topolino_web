@@ -6,17 +6,27 @@ import { SPOTS, SPOT_HW, SPOT_HD, STARTING_POSITIONS } from './ParkingSpots.js';
 // ── Coordonnées monde couvertes par la texture ────────────────────────────────
 // PlaneGeometry(80, 48) centré en (0, 0.01, 2) → X=[-40,40], Z=[-22,26]
 const WX0 = -40, WX1 = 40, WW = 80;
-const WZ0 =  26, WZ1 = -22, WH = 48;  // Z décroit (nord)
+// Attention: le canvas y=0 correspond au haut de la géométrie (v=1 si flipY=true).
+// Rotation de -PI/2 sur X met le haut (local y=24) en Z=-22.
+// Donc canvas y=0 correspond à Z=-22, et canvas y=TH correspond à Z=26.
+const WZ0 = -22, WH = 48;
 const TW  = 2048, TH = 1024;
 
 function cx(wx) { return (wx - WX0) / WW * TW; }
-function cy(wz) { return (WZ0 - wz) / WH * TH; }
+function cy(wz) { return (wz - WZ0) / WH * TH; }
 
 // ── Dessin du rectangle d'une place ──────────────────────────────────────────
 function drawSpotRect(ctx, spot, color, lw) {
     const fwdX = -Math.sin(spot.angle), fwdZ = -Math.cos(spot.angle);
     const rX = fwdZ, rZ = -fwdX;
-    const hw = SPOT_HW, hd = SPOT_HD;
+    
+    // Inverser HW et HD visuellement si c'est un créneau (car garé de côté)
+    let hw = SPOT_HW, hd = SPOT_HD;
+    if (spot.type === 'creneau') {
+        hw = SPOT_HD; 
+        hd = SPOT_HW;
+    }
+
     const C = [
         [spot.x + fwdX*hd + rX*hw, spot.z + fwdZ*hd + rZ*hw],
         [spot.x + fwdX*hd - rX*hw, spot.z + fwdZ*hd - rZ*hw],
@@ -77,28 +87,28 @@ function buildTexture() {
 
     // 2. Zone intérieure de parking (légèrement plus claire)
     ctx.fillStyle = '#464646';
-    ctx.fillRect(cx(-30), cy(11), cx(30) - cx(-30), cy(-11) - cy(11));
+    ctx.fillRect(cx(-30), cy(-11), cx(30) - cx(-30), cy(11) - cy(-11));
 
     // 3. Trottoirs (bandes claires entre zone intérieure et route)
     ctx.fillStyle = '#8a8a8a';
-    // Haut
-    ctx.fillRect(cx(-30), cy(12), cx(30) - cx(-30), cy(11) - cy(12));
-    // Bas
-    ctx.fillRect(cx(-30), cy(-11), cx(30) - cx(-30), cy(-12) - cy(-11));
+    // Haut (Z = -12 à -11)
+    ctx.fillRect(cx(-30), cy(-12), cx(30) - cx(-30), cy(-11) - cy(-12));
+    // Bas (Z = 11 à 12)
+    ctx.fillRect(cx(-30), cy(11), cx(30) - cx(-30), cy(12) - cy(11));
 
     // 4. Herbe extérieure (au-delà de X=±37, Z=±18) — remplie en vert
     ctx.fillStyle = '#4a7c3a';
     // Bords gauche/droit
     ctx.fillRect(0,        0, cx(-37),             TH);
     ctx.fillRect(cx(37),   0, TW - cx(37),          TH);
-    // Bords haut/bas
-    ctx.fillRect(cx(-37), 0,         cx(37) - cx(-37), cy(18));
-    ctx.fillRect(cx(-37), cy(-18),   cx(37) - cx(-37), TH - cy(-18));
+    // Bords haut/bas (Haut Z < -18, Bas Z > 18)
+    ctx.fillRect(cx(-37), 0,         cx(37) - cx(-37), cy(-18));
+    ctx.fillRect(cx(-37), cy(18),    cx(37) - cx(-37), TH - cy(18));
 
     // 5. Zone de départ F1 (prolongement à droite de la droite du bas)
     // Asphalte foncé Z=+11 à +18, X=-37 à +37
     ctx.fillStyle = '#2e2e2e';
-    ctx.fillRect(cx(-37), cy(18), cx(37) - cx(-37), cy(11) - cy(18));
+    ctx.fillRect(cx(-37), cy(11), cx(37) - cx(-37), cy(18) - cy(11));
 
     // 6. Tirets axe médian sur chaque tronçon
     const MID_R = 33.5, MID_L = -33.5, MID_B = 14.5, MID_T = -14.5;
@@ -138,32 +148,9 @@ function buildTexture() {
         ctx.restore();
     }
 
-    // 10. Ligne de départ (damier) à x=-27, traversant la droite du bas
-    {
-        const sqH = cy(11) - cy(18); // hauteur en pixels du tronçon
-        const sqW = sqH;             // carré
-        const startX = cx(-27);
-        const numRows = Math.ceil((cy(-11) - cy(-18)) / sqH) + 1;
-        const colZ0   = cy(18);      // haut du tronçon bas
-        for (let row = 0; row < 3; row++) {
-            for (let col = 0; col <= 1; col++) {
-                ctx.fillStyle = (row + col) % 2 === 0 ? '#ffffff' : '#000000';
-                ctx.fillRect(startX + col * sqW, colZ0 + row * sqH, sqW, sqH);
-            }
-        }
-    }
+    // 10. Ligne de départ (damier) supprimée
 
-    // 11. Boxes de grille F1 (rectangles tracés sur la droite du bas)
-    ctx.strokeStyle = 'rgba(255,255,0,0.6)';
-    ctx.lineWidth = 2;
-    for (const pos of STARTING_POSITIONS) {
-        ctx.strokeRect(cx(pos.x - 2), cy(pos.z + 2.5), cx(pos.x + 2) - cx(pos.x - 2), cy(pos.z - 2.5) - cy(pos.z + 2.5));
-        // Numéro de position
-        ctx.fillStyle = 'rgba(255,255,0,0.5)';
-        ctx.font = `bold ${Math.round(cy(0) - cy(2))}px Arial`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-    }
+    // 11. Boxes de grille F1 supprimées
 
     // 12. Panneau "PARKING" dans la zone intérieure (décoratif)
     ctx.fillStyle = 'rgba(70,70,70,0.0)'; // invisible, juste pour la lisibilité du code
@@ -172,11 +159,37 @@ function buildTexture() {
     ctx.strokeStyle = 'rgba(180,180,180,0.4)';
     ctx.lineWidth = 2;
     ctx.setLineDash([6, 4]);
-    ctx.strokeRect(cx(-30), cy(11), cx(30) - cx(-30), cy(-11) - cy(11));
+    ctx.strokeRect(cx(-30), cy(-11), cx(30) - cx(-30), cy(11) - cy(-11));
     ctx.setLineDash([]);
 
     return new THREE.CanvasTexture(canvas);
 }
+
+// Shader pour les hachures dynamiques
+const hatchShader = {
+    uniforms: {
+        uColor: { value: new THREE.Color(1, 0, 0) },
+        uOpacity: { value: 0.0 }
+    },
+    vertexShader: `
+        varying vec2 vUv;
+        void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    `,
+    fragmentShader: `
+        uniform vec3 uColor;
+        uniform float uOpacity;
+        varying vec2 vUv;
+        void main() {
+            // Lignes diagonales
+            float line = mod((vUv.x + vUv.y) * 15.0, 1.0);
+            float alpha = step(0.5, line) * uOpacity;
+            gl_FragColor = vec4(uColor, alpha);
+        }
+    `
+};
 
 // ── Export principal ──────────────────────────────────────────────────────────
 export function createParkingLot() {
@@ -230,6 +243,36 @@ export function createParkingLot() {
         meshes.push(m);
     });
 
+    // D. Feedback dynamique sur les places vides (Hachures)
+    for (const spot of SPOTS) {
+        if (!spot.empty) continue;
+        
+        let w = SPOT_HW * 2;
+        let h = SPOT_HD * 2;
+        if (spot.type === 'creneau') {
+            w = SPOT_HD * 2;
+            h = SPOT_HW * 2;
+        }
+
+        const spotGeo = new THREE.PlaneGeometry(w, h);
+        const sMat = new THREE.ShaderMaterial({
+            uniforms: THREE.UniformsUtils.clone(hatchShader.uniforms),
+            vertexShader: hatchShader.vertexShader,
+            fragmentShader: hatchShader.fragmentShader,
+            transparent: true,
+            depthWrite: false
+        });
+        const sm = new THREE.Mesh(spotGeo, sMat);
+        sm.rotation.x = -Math.PI / 2;
+        // Pour bataille (angle PI), le spotGeo PlaneGeometry s'aligne bien.
+        // Pour creneau (angle -PI/2), on ne le tourne pas ici car on a déjà inversé w/h.
+        sm.rotation.z = (spot.type === 'bataille') ? -spot.angle : 0;
+        sm.position.set(spot.x, 0.05, spot.z);
+        scene.add(sm);
+        meshes.push(sm);
+        spot._feedbackMesh = sm;
+    }
+
     return {
         dispose() {
             meshes.forEach(m => {
@@ -238,6 +281,7 @@ export function createParkingLot() {
                 if (m.material.map) m.material.map.dispose();
                 m.material.dispose();
             });
+            for (const s of SPOTS) s._feedbackMesh = null;
         },
     };
 }

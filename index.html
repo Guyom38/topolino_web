@@ -9,24 +9,6 @@
         @keyframes parkingBlink { 0%,100%{opacity:1} 50%{opacity:0.15} }
         canvas { display: block; }
 
-        /* ── Scoreboard (haut-gauche) ── */
-        #scoreboard {
-            position: absolute; top: 10px; left: 10px;
-            display: flex; flex-direction: column; gap: 4px;
-            pointer-events: none;
-        }
-        .sb-row {
-            display: flex; align-items: center; gap: 7px;
-            background: rgba(0,0,0,0.45); border-radius: 20px;
-            padding: 4px 12px 4px 6px;
-            backdrop-filter: blur(4px);
-        }
-        .sb-row.sb-inv { opacity: 0.5; }
-        .sb-dot  { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
-        .sb-name { color: #fff; font-size: 13px; font-weight: 600; max-width: 120px;
-                   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .sb-hits { color: #ffcc00; font-size: 12px; font-weight: 700; margin-left: auto; }
-
         /* ── QR Code (haut-droite) ── */
         #qr-wrap {
             position: absolute; top: 10px; right: 10px;
@@ -34,45 +16,43 @@
             padding: 8px 8px 4px;
             display: flex; flex-direction: column; align-items: center; gap: 4px;
             box-shadow: 0 2px 12px rgba(0,0,0,0.3);
-            pointer-events: none;
+            pointer-events: none; z-index: 95;
         }
         #qr-canvas { width: 96px; height: 96px; }
         #qr-label  { font-size: 9px; color: #333; text-align: center; max-width: 96px;
                      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         #qr-hint   { font-size: 10px; color: #555; font-weight: 600; }
+
+        /* ── Debug caméra (bas-gauche) ── */
         #cam-debug {
             position: absolute; bottom: 10px; left: 10px;
             background: rgba(0,0,0,0.55); color: #0ff;
             font-family: monospace; font-size: 12px; line-height: 1.7;
             padding: 6px 10px; border-radius: 6px;
-            pointer-events: none;
+            pointer-events: none; z-index: 95;
         }
 
-        /* ── Sélecteur de mode ── */
-        #mode-switcher {
-            position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
-            display: flex; gap: 8px;
-            pointer-events: auto;
+        /* ── Barre de modes (bas-centre) ── */
+        #mode-bar {
+            position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 6px; align-items: center;
+            pointer-events: auto; z-index: 95;
         }
         .mode-btn {
-            background: rgba(0,0,0,0.5); color: #fff; border: none;
-            border-radius: 20px; padding: 6px 16px; font-size: 13px; font-weight: 600;
-            cursor: pointer; backdrop-filter: blur(4px); transition: background 0.2s;
+            background: rgba(0,0,0,0.55); color: #fff; border: none;
+            border-radius: 24px; padding: 8px 16px;
+            font-size: 13px; font-weight: 700;
+            cursor: pointer; backdrop-filter: blur(6px);
+            transition: background 0.15s, transform 0.1s;
+            white-space: nowrap;
         }
-        .mode-btn:hover { background: rgba(255,255,255,0.2); }
-        .mode-btn.active { background: rgba(255,200,0,0.7); color: #000; }
+        .mode-btn:hover  { background: rgba(255,255,255,0.18); transform: translateY(-2px); }
+        .mode-btn.active { background: rgba(255,200,0,0.80); color: #000; }
+        .mode-btn.wip    { opacity: 0.45; cursor: default; }
+        .mode-btn.wip:hover { transform: none; background: rgba(0,0,0,0.55); }
     </style>
 </head>
 <body>
-
-    <!-- Sélecteur de mode -->
-    <div id="mode-switcher">
-        <button class="mode-btn" onclick="window.location.href='?mode=drive'" id="btn-drive">🏔 Conduite libre</button>
-        <button class="mode-btn" onclick="window.location.href='?mode=parking'" id="btn-parking">🅿 Parking</button>
-    </div>
-
-    <!-- Scoreboard -->
-    <div id="scoreboard"></div>
 
     <!-- QR Code -->
     <div id="qr-wrap">
@@ -84,12 +64,21 @@
     <!-- Debug caméra (bas-gauche) -->
     <div id="cam-debug">—</div>
 
-    <!-- Socket.IO (non-module, disponible comme global `io`) -->
-    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <!-- Barre de modes (bas) -->
+    <div id="mode-bar">
+        <button class="mode-btn" id="btn-drive"   onclick="go('drive')"  >🏔 Conduite</button>
+        <button class="mode-btn" id="btn-chase"   onclick="go('chase')"  >🧳 Poursuite</button>
+        <button class="mode-btn" id="btn-parking" onclick="go('parking')">🅿 Parking</button>
+        <button class="mode-btn" id="btn-tron"   onclick="go('tron')"  >🌀 Tron</button>
+        <button class="mode-btn" id="btn-derby"  onclick="go('derby')" >💥 Derby</button>
+        <button class="mode-btn" id="btn-battle" onclick="go('battle')">🎈 Battle</button>
+        <button class="mode-btn" id="btn-foot"   onclick="go('foot')"  >⚽ Foot</button>
+    </div>
 
+    <!-- Socket.IO -->
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
     <!-- QRCode.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-
     <!-- ES module shims + importmap -->
     <script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
     <script type="importmap">
@@ -104,6 +93,7 @@
     <script>
         const mode = new URLSearchParams(location.search).get('mode') ?? 'drive';
         document.getElementById('btn-' + mode)?.classList.add('active');
+        function go(m) { window.location.href = '?mode=' + m; }
     </script>
 
     <script type="module" src="src/main.js"></script>

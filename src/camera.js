@@ -41,11 +41,30 @@ export function getCameraDebug() {
     };
 }
 
-// ── Mode parking : vue paysage TV (lot 80×44 unités, 16:9) ───────────────────
+// ── Cible fixe optionnelle (modes arène) ──────────────────────────────────────
+let _fixedTarget = null;
+
+export function setCameraFixed(x, y, z) {
+    _fixedTarget = new THREE.Vector3(x, y, z);
+    initialized  = false;
+}
+export function setCameraFollow() {
+    _fixedTarget = null;
+    initialized  = false;
+}
+
+// ── Presets par mode ─────────────────────────────────────────────────────────
 export function setParkingCamera() {
-    PHI    = 0.38;  // ~22° depuis le zénith — vue large
-    THETA  = 0;     // caméra au sud (+Z), regarde vers le nord (-Z)
-    RADIUS = 80;    // recul suffisant pour FOV 75° sur 80 unités de large
+    PHI = 0.38; THETA = 0; RADIUS = 80;
+}
+export function setTronCamera() {
+    PHI = 0.08; THETA = 0; RADIUS = 110; // presque à la verticale
+}
+export function setDerbyCamera() {
+    PHI = 0.55; THETA = Math.PI * 0.8; RADIUS = 65;
+}
+export function setFootCamera() {
+    PHI = 0.40; THETA = 0; RADIUS = 95;
 }
 
 /**
@@ -54,18 +73,18 @@ export function setParkingCamera() {
  */
 export function updateCamera(players) {
     const active = Array.from(players.values()).filter(p => p.car);
-    if (active.length === 0) return;
 
-    _centroid.set(0, 0, 0);
-    for (const p of active) _centroid.add(p.car.position);
-    _centroid.divideScalar(active.length);
-
-    if (!initialized) {
-        currentTarget.copy(_centroid);
-        initialized = true;
+    if (_fixedTarget) {
+        if (!initialized) { currentTarget.copy(_fixedTarget); initialized = true; }
+        currentTarget.lerp(_fixedTarget, TARGET_LERP);
+    } else {
+        if (active.length === 0) return;
+        _centroid.set(0, 0, 0);
+        for (const p of active) _centroid.add(p.car.position);
+        _centroid.divideScalar(active.length);
+        if (!initialized) { currentTarget.copy(_centroid); initialized = true; }
+        currentTarget.lerp(_centroid, TARGET_LERP);
     }
-
-    currentTarget.lerp(_centroid, TARGET_LERP);
 
     camera.position.set(
         currentTarget.x + RADIUS * Math.sin(PHI) * Math.sin(THETA),

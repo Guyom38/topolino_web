@@ -1,26 +1,36 @@
 @echo off
 setlocal
 
-echo --- Topolino Game Server Starter (Node.js) ---
+echo --- Topolino Game Server ---
 
-:: Vérifier si Node.js est installé
-where node >nul 2>&1
+:: Priorité : Python (Flask + Socket.IO = multijoueur complet)
+where python >nul 2>&1
 if %ERRORLEVEL% EQU 0 (
-    echo [OK] Node.js detecte. Lancement du serveur...
-    
-    :: Installer les dépendances si nécessaire (Express, Body-Parser)
-    if not exist "node_modules" (
-        echo [INFO] Installation des dependances...
-        npm install express body-parser
+    echo [OK] Python detecte. Lancement du serveur Flask...
+    python -c "import flask_socketio" >nul 2>&1
+    if %ERRORLEVEL% NEQ 0 (
+        echo [INFO] Installation de flask et flask-socketio...
+        pip install flask flask-socketio gevent gevent-websocket
     )
-    
     start http://localhost:5000
-    node server.js
+    python server.py
     goto end
 )
 
-echo [ERREUR] Node.js est requis pour faire fonctionner le système d'upload et la manette mobile.
-echo Veuillez l'installer sur https://nodejs.org/
+:: Fallback : Python3
+where python3 >nul 2>&1
+if %ERRORLEVEL% EQU 0 (
+    echo [OK] Python3 detecte. Lancement du serveur Flask...
+    python3 -c "import flask_socketio" >nul 2>&1
+    if %ERRORLEVEL% NEQ 0 (
+        pip3 install flask flask-socketio gevent gevent-websocket
+    )
+    start http://localhost:5000
+    python3 server.py
+    goto end
+)
+
+echo [ERREUR] Python est requis. Installez Python sur https://www.python.org/
 pause
 
 :end

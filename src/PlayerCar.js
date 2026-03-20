@@ -43,6 +43,37 @@ export class PlayerCar {
         // ── Systèmes traces / ombre (injectés après chargement) ───────────────
         this.tracks = null;
         this.shadow = null;
+
+        // ── Mode voleur de bagage ─────────────────────────────────────────────
+        this.hasLuggage        = false;
+        this.luggageMeshes     = []; // Rempli lors du loadCarForPlayer
+        this.luggageScore      = 0;  // secondes de possession accumulées
+        this._luggageGotTime   = 0;  // performance.now() quand on a pris le bagage
+
+        // ── Expressions (photos capturées sur mobile) ─────────────────────────
+        // 0=neutre 1=souriant 2=excité 3=en_colère 4=concentré 5=victoire
+        this.photos          = [];   // Array<string|null> (base64 JPEG, max 6)
+        this.expressionIndex = 0;
+        this._exprTimestamps = {};   // { hitOther, gotHit, luggage }
+    }
+
+    setLuggage(hasIt) {
+        if (this.hasLuggage && !hasIt) {
+            // Comptabiliser le temps de possession écoulé
+            this.luggageScore += (performance.now() - this._luggageGotTime) / 1000;
+        }
+        this.hasLuggage = hasIt;
+        this.luggageMeshes.forEach(m => { m.visible = hasIt; });
+        if (hasIt) {
+            this._luggageGotTime = performance.now();
+            this.invincibleUntil = performance.now() + HIT_COOLDOWN * 2;
+        }
+    }
+
+    /** Score temps de possession (y compris session en cours) */
+    getLuggageScore() {
+        if (!this.hasLuggage) return this.luggageScore;
+        return this.luggageScore + (performance.now() - this._luggageGotTime) / 1000;
     }
 
     // ── Invincibilité ─────────────────────────────────────────────────────────
@@ -52,6 +83,30 @@ export class PlayerCar {
         if (now < this.invincibleUntil) return;
         this.hitCount++;
         this.invincibleUntil = now + HIT_COOLDOWN;
+        this._exprTimestamps.gotHit = now;
+    }
+
+    onHitOther() {
+        this._exprTimestamps.hitOther = performance.now();
+    }
+
+    setPhotos(photos) {
+        this.photos = photos || [];
+    }
+
+    /** Met à jour l'expression en fonction des événements récents et du contexte */
+    updateExpression(isLeading) {
+        const now   = performance.now();
+        const ts    = this._exprTimestamps;
+        const speed = Math.abs(this.carSpeed);
+
+        // Priorité : victoire > excité (vol de bagage) > en colère > souriant > concentré > neutre
+        if (isLeading)                                 { this.expressionIndex = 5; return; } // victoire
+        if (ts.hitOther && now - ts.hitOther < 2500)   { this.expressionIndex = 2; return; } // excité
+        if (ts.gotHit   && now - ts.gotHit   < 2500)   { this.expressionIndex = 3; return; } // en colère
+        if (this.hasLuggage)                           { this.expressionIndex = 1; return; } // souriant
+        if (speed > 0.18)                              { this.expressionIndex = 4; return; } // concentré
+        this.expressionIndex = 0; // neutre
     }
 
     // ── Label de nom ─────────────────────────────────────────────────────────

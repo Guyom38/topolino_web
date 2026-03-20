@@ -5,6 +5,7 @@ import { loadStaticCar } from '../car.js';
 import { SPOTS, STARTING_POSITIONS } from './ParkingSpots.js';
 import { createParkingLot } from './ParkingLot.js';
 import { scorePlayer } from './ParkingScorer.js';
+import { getLocalPlayer } from '../multiplayer.js';
 import {
     initParkingUI, updateParkingTimer, updateParkingScores,
     hideParkingUI, updateScoreSprites, disposeScoreSprites,
@@ -54,11 +55,20 @@ export async function initParkingMode(players) {
     _lot = createParkingLot();
     createParkingTerrain();
 
-    // Voitures statiques sur les places occupées
+    // Voitures statiques sur les places occupées avec un léger décalage (mauvais conducteurs)
     _staticCars = [];
     for (const spot of SPOTS) {
         if (!spot.empty) {
-            const m = await loadStaticCar(spot.x, spot.z, spot.angle);
+            // Décalage aléatoire pour plus de réalisme
+            const offsetX = (Math.random() - 0.5) * 0.8;
+            const offsetZ = (Math.random() - 0.5) * 0.8;
+            const offsetA = (Math.random() - 0.5) * 0.15; // légère rotation
+            
+            const sx = spot.x + offsetX;
+            const sz = spot.z + offsetZ;
+            const sa = spot.angle + offsetA;
+
+            const m = await loadStaticCar(sx, sz, sa);
             if (m) _staticCars.push(m);
         }
     }
@@ -116,7 +126,6 @@ export function updateParkingMode(players, now) {
 
         if (remaining <= 0) {
             _phase = 'ended';
-            for (const [id, p] of players) _scores.set(id, scorePlayer(p));
             for (const [, p] of players) {
                 p.keys = { up: false, down: false, left: false, right: false, jx: 0, jy: 0 };
             }
@@ -130,12 +139,48 @@ export function updateParkingMode(players, now) {
         }
     }
 
+    // Toujours mettre à jour les scores pour le feedback dynamique
+    for (const [id, p] of players) {
+        _scores.set(id, scorePlayer(p));
+    }
+
     updateParkingScores(players, _scores);
     updateScoreSprites(players, _scores, scene);
+
+    // ── Update Feedback visuel des places ─────────────────────────────────────
+    if (_phase === 'racing' || _phase === 'ended') {
+        const lp = getLocalPlayer();
+        const sc = _scores.get(lp?.id);
+        
+        // Réinitialiser tous les feedbacks
+        for (const spot of SPOTS) {
+            if (!spot._feedbackMesh) continue;
+            spot._feedbackMesh.material.uniforms.uOpacity.value = 0.0;
+        }
+
+        // Si le joueur est sur une place, on l'allume
+        if (sc && sc.spot && sc.spot._feedbackMesh) {
+            const mesh = sc.spot._feedbackMesh;
+            mesh.material.uniforms.uOpacity.value = 0.5;
+            
+            // Score maximum de position/angle ≈ 80.
+            const perf = sc.total - sc.spot.baseScore; // entre 0 et ~80
+            
+            // Rouge si mauvais, orange si moyen, vert si parfait
+            if (perf > 65) {
+                mesh.material.uniforms.uColor.value.setHex(0x00ff00); // Vert
+            } else if (perf > 40) {
+                mesh.material.uniforms.uColor.value.setHex(0xffaa00); // Orange
+            } else {
+                mesh.material.uniforms.uColor.value.setHex(0xff0000); // Rouge
+            }
+        }
+    }
 }
 
 export function getParkingTerrainY() { return 0; }
 export function isParkingActive()    { return _phase === 'racing'; }
+export function getStaticCars()      { return _staticCars; }
 
 // ── Dispose ───────────────────────────────────────────────────────────────────
 export function disposeParkingMode() {

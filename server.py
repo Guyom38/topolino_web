@@ -5,7 +5,10 @@ import uuid
 import time
 import socket as _socket
 
+import os
 from flask import Flask, send_file, jsonify, request
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 from flask_socketio import SocketIO, emit, disconnect
 
 app = Flask(__name__, static_folder='.', static_url_path='')
@@ -32,11 +35,11 @@ def get_local_ip():
 
 @app.route('/')
 def index():
-    return send_file('index.html')
+    return send_file(os.path.join(BASE_DIR, 'index.html'))
 
 @app.route('/mobile')
 def mobile():
-    return send_file('mobile.html')
+    return send_file(os.path.join(BASE_DIR, 'mobile.html'))
 
 @app.route('/api/info')
 def api_info():
@@ -58,6 +61,10 @@ def on_register_display():
         for p in players.values() if p.get('type') == 'mobile'
     ]
     emit('player_list', mobile_players)
+    # Envoyer les photos déjà reçues
+    for p in players.values():
+        if p.get('type') == 'mobile' and p.get('photos'):
+            emit('player_photos', {'player_id': p['id'], 'photos': p['photos']})
 
 @socketio.on('register_mobile')
 def on_register_mobile(data):
@@ -84,6 +91,18 @@ def on_register_mobile(data):
     for sid in list(display_sids):
         socketio.emit('player_joined', msg, to=sid)
 
+@socketio.on('player_photos')
+def on_player_photos(data):
+    p = players.get(request.sid)
+    if not p or p.get('type') != 'mobile':
+        return
+    photos = data.get('photos', [])
+    # Stocker les photos (max 6, chacune max ~20KB)
+    p['photos'] = photos[:6]
+    msg = {'player_id': p['id'], 'photos': p['photos']}
+    for sid in list(display_sids):
+        socketio.emit('player_photos', msg, to=sid)
+
 @socketio.on('input')
 def on_input(data):
     p = players.get(request.sid)
@@ -106,6 +125,15 @@ def on_config_update(data):
     msg = {'player_id': p['id'], 'name': p['name'], 'color': p['color']}
     for sid in list(display_sids):
         socketio.emit('player_config', msg, to=sid)
+
+@socketio.on('change_mode')
+def on_change_mode(data):
+    p = players.get(request.sid)
+    if not p or p.get('type') != 'mobile':
+        return
+    mode = str(data.get('mode', 'drive'))[:20]
+    for sid in list(display_sids):
+        socketio.emit('change_mode', {'mode': mode}, to=sid)
 
 @socketio.on('heartbeat')
 def on_heartbeat():

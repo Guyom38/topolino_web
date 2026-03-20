@@ -34,10 +34,21 @@ export async function loadCarForPlayer(player) {
     clone.position.z = -center.z;
     clone.position.y = -box.min.y;
 
+    player.luggageMeshes = [];
+
     clone.traverse(child => {
         if (!child.isMesh) return;
         child.castShadow    = true;
         child.receiveShadow = true;
+
+        const n = child.name.toLowerCase();
+
+        // Stocker les pièces de bagage pour pouvoir les cacher/afficher
+        if (n.includes('bagage')) {
+            player.luggageMeshes.push(child);
+            // On peut optionnellement les cacher par défaut
+            // child.visible = false; 
+        }
 
         const mat = getMaterialForMesh(child.name);
         if (mat) {
@@ -55,7 +66,6 @@ export async function loadCarForPlayer(player) {
         }
 
         // Détection des roues
-        const n = child.name.toLowerCase();
         if (n.includes('roue')) {
             child.geometry.computeBoundingBox();
             const size = new THREE.Vector3();

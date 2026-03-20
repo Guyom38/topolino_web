@@ -22,6 +22,8 @@ export async function initMultiplayer() {
     await loadCarForPlayer(localPlayer);
     localPlayer.tracks = createTrackSystem();
     localPlayer.shadow = createShadow();
+    // Le premier joueur (local) commence avec le bagage
+    localPlayer.setLuggage(true);
     // Pas de label de nom pour le joueur local (caméra le suit)
 
     _connectToServer();
@@ -70,6 +72,18 @@ function _connectToServer() {
             if (d.color) p.setColor(d.color);
         });
 
+        sock.on('player_photos', d => {
+            const p = players.get(d.player_id);
+            if (p) p.setPhotos(d.photos);
+        });
+
+        sock.on('change_mode', d => {
+            const mode = d.mode;
+            if (mode && /^[a-z]+$/.test(mode)) {
+                window.location.href = '?mode=' + mode;
+            }
+        });
+
         sock.on('disconnect', () => console.log('[MP] Déconnecté du serveur'));
     };
     tryConnect();
@@ -82,6 +96,7 @@ async function _addRemote(id, name, color) {
     players.set(id, p);
 
     await loadCarForPlayer(p);
+    p.setLuggage(false); // Cacher le bagage par défaut
     p.tracks = createTrackSystem();
     p.shadow = createShadow();
     p.createNameLabel();
@@ -90,5 +105,9 @@ async function _addRemote(id, name, color) {
 function _removePlayer(id) {
     if (id === LOCAL_ID) return;
     const p = players.get(id);
-    if (p) { p.dispose(); players.delete(id); }
+    if (p) { 
+        if (p.hasLuggage && localPlayer) localPlayer.setLuggage(true);
+        p.dispose(); 
+        players.delete(id); 
+    }
 }
