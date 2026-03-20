@@ -44,7 +44,8 @@ export function updatePhysics(p, terrainY, getY = undefined) {
 
     // --- Modèle bicycle ---
     if (Math.abs(p.carSpeed) > 0.01) {
-        p.carAngle += (p.carSpeed * p.steeringAngle * (p.carSpeed > 0 ? 1 : -1)) / config.wheelBase;
+        // Supprimer l'inversion manuelle pour que la marche arrière soit naturelle
+        p.carAngle += (p.carSpeed * p.steeringAngle) / config.wheelBase;
     }
 
     // --- Frein à main ---
@@ -75,7 +76,11 @@ export function updatePhysics(p, terrainY, getY = undefined) {
     p.verticalVelocity -= config.gravity;
     p.car.position.y   += p.verticalVelocity;
 
-    if (p.car.position.y <= terrainY) {
+    const isChase = new URLSearchParams(window.location.search).get('mode') === 'chase';
+    const limit   = 50.0;
+    const isInside = !isChase || (Math.abs(p.car.position.x) <= limit && Math.abs(p.car.position.z) <= limit);
+
+    if (isInside && p.car.position.y <= terrainY) {
         p.car.position.y   = terrainY;
         p.verticalVelocity = 0;
         p.onGround         = true;

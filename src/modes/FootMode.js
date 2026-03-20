@@ -3,11 +3,11 @@ import * as THREE from 'three';
 import { scene } from '../scene.js';
 import { setFootCamera, setCameraFollow, setCameraFixed } from '../camera.js';
 
-const FIELD_W   = 90;   // largeur du terrain
+const FIELD_W   = 140;  // terrain beaucoup plus large
 const FIELD_D   = 60;   // profondeur (axe Z)
 const GOAL_W    = 12;   // largeur du but
 const GOAL_H    = 4;    // hauteur des poteaux
-const BALL_R    = 0.8;  // rayon de la balle
+const BALL_R    = 2.4;  // rayon de la balle (x3)
 const BALL_MASS = 0.6;  // plus légère qu'une voiture
 const FRICTION  = 0.985;
 const CAR_PUSH  = 0.32; // force de poussée voiture → balle
@@ -22,6 +22,7 @@ let _phase      = 'playing';
 let _statusEl   = null;
 let _scoreEl    = null;
 let _goalFlash  = 0;   // frames de flash après but
+let _teamIndicators = new Map(); // playerId -> mesh cercle
 
 // ── Terrain ───────────────────────────────────────────────────────────────────
 function _createField() {
@@ -88,7 +89,7 @@ function _createGoals() {
         gGroup.add(postR);
 
         const cross = new THREE.Mesh(crossGeo, mat);
-        cross.rotation.z = Math.PI / 2;
+        cross.rotation.x = Math.PI / 2;
         cross.position.set(0, GOAL_H, 0);
         gGroup.add(cross);
 
@@ -158,7 +159,7 @@ export async function initFootMode(players) {
         _teamMap.set(p.id, team);
         // Placement selon équipe
         const side = team === 'A' ? -1 : 1;
-        p.car.position.set(side * 20 + (Math.random() - 0.5) * 8, 0, (Math.random() - 0.5) * 16);
+        p.car.position.set(side * 25 + (Math.random() - 0.5) * 8, 0, (Math.random() - 0.5) * 16);
         p.carAngle = team === 'A' ? 0 : Math.PI;
         p.car.rotation.y = p.carAngle;
         p.carSpeed = 0;
@@ -168,17 +169,45 @@ export async function initFootMode(players) {
     setFootCamera();
     setCameraFixed(0, 0, 0);
 
+    // Nettoyage UI précédente
+    document.getElementById('foot-ui-container')?.remove();
+
+    // Conteneur Global UI
+    const uiContainer = document.createElement('div');
+    uiContainer.id = 'foot-ui-container';
+    Object.assign(uiContainer.style, {
+        position: 'absolute', top: '0', left: '0', width: '100%', height: '100%',
+        pointerEvents: 'none', zIndex: '100', fontFamily: 'monospace'
+    });
+    document.body.appendChild(uiContainer);
+
+    // Listes Joueurs Gauche (Team A - Rouge)
+    const listA = document.createElement('div');
+    listA.id = 'foot-list-a';
+    Object.assign(listA.style, {
+        position: 'absolute', top: '100px', left: '20px', color: '#ff8888',
+        fontSize: '18px', textAlign: 'left', textShadow: '2px 2px 4px #000'
+    });
+    uiContainer.appendChild(listA);
+
+    // Listes Joueurs Droite (Team B - Bleu)
+    const listB = document.createElement('div');
+    listB.id = 'foot-list-b';
+    Object.assign(listB.style, {
+        position: 'absolute', top: '100px', right: '20px', color: '#88aaff',
+        fontSize: '18px', textAlign: 'right', textShadow: '2px 2px 4px #000'
+    });
+    uiContainer.appendChild(listB);
+
     // HUD score
     _scoreEl = document.createElement('div');
     _scoreEl.id = 'foot-score';
     Object.assign(_scoreEl.style, {
         position: 'absolute', top: '16px', left: '50%', transform: 'translateX(-50%)',
         fontSize: '42px', fontWeight: '900', color: '#fff',
-        fontFamily: 'monospace', letterSpacing: '8px',
-        textShadow: '0 0 16px rgba(0,0,0,0.8)',
-        pointerEvents: 'none', zIndex: '100',
+        letterSpacing: '8px', textShadow: '0 0 16px rgba(0,0,0,0.8)',
     });
-    document.body.appendChild(_scoreEl);
+    uiContainer.appendChild(_scoreEl);
 
     // HUD status
     _statusEl = document.createElement('div');
@@ -186,18 +215,38 @@ export async function initFootMode(players) {
     Object.assign(_statusEl.style, {
         position: 'absolute', top: '72px', left: '50%', transform: 'translateX(-50%)',
         fontSize: '24px', fontWeight: '800', color: '#ffdd00',
-        fontFamily: 'monospace',
-        textShadow: '0 0 12px rgba(0,0,0,0.9)',
-        pointerEvents: 'none', zIndex: '100', display: 'none',
+        textShadow: '0 0 12px rgba(0,0,0,0.9)', display: 'none',
     });
-    document.body.appendChild(_statusEl);
+    uiContainer.appendChild(_statusEl);
 
-    _updateScoreHUD();
+    // Création des cercles sous les voitures
+    const circleGeo = new THREE.RingGeometry(2.5, 3.0, 32);
+    circleGeo.rotateX(-Math.PI / 2);
+
+    players.forEach(p => {
+        if (!p.car) return;
+        const team = _teamMap.get(p.id);
+        const color = team === 'A' ? 0xff4444 : 0x4488ff;
+        const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.8, side: THREE.DoubleSide });
+        const mesh = new THREE.Mesh(circleGeo, mat);
+        scene.add(mesh);
+        _teamIndicators.set(p.id, mesh);
+    });
+
+    _updateScoreHUD(players);
 }
 
 // ── Update ────────────────────────────────────────────────────────────────────
 export function updateFootMode(players, now) {
     if (!_ball) return;
+
+    // Mise à jour position cercles équipe
+    players.forEach(p => {
+        const indicator = _teamIndicators.get(p.id);
+        if (indicator && p.car) {
+            indicator.position.set(p.car.position.x, 0.05, p.car.position.z);
+        }
+    });
 
     // Rotation visuelle de la balle selon sa vélocité
     const speed = _ballVel.length();
@@ -243,7 +292,7 @@ export function updateFootMode(players, now) {
         const dx = _ball.position.x - p.car.position.x;
         const dz = _ball.position.z - p.car.position.z;
         const dist = Math.sqrt(dx*dx + dz*dz);
-        const touchR = BALL_R + 1.3;
+        const touchR = BALL_R + 1.5; // Rayon ballon + marge voiture
         if (dist < touchR && dist > 0.01) {
             const nx = dx / dist, nz = dz / dist;
             // Dépénétration
@@ -270,7 +319,7 @@ export function updateFootMode(players, now) {
             _goalFlash = 120;
             _ball.position.set(0, BALL_R, 0);
             _ballVel.set(0, 0, 0);
-            _updateScoreHUD();
+            _updateScoreHUD(players);
             if (_statusEl) {
                 _statusEl.textContent = `⚽ BUT de l'équipe ${goal.teamScore} !`;
                 _statusEl.style.display = 'block';
@@ -286,12 +335,26 @@ export function updateFootMode(players, now) {
     }
 }
 
-function _updateScoreHUD() {
+function _updateScoreHUD(players) {
     if (!_scoreEl) return;
     _scoreEl.innerHTML =
         `<span style="color:#ff8888">🔴 ${_scores.A}</span>` +
         ` &ndash; ` +
         `<span style="color:#88aaff">${_scores.B} 🔵</span>`;
+
+    // Update listes joueurs
+    const listA = document.getElementById('foot-list-a');
+    const listB = document.getElementById('foot-list-b');
+    if (listA && listB) {
+        let htmlA = "<b>EQUIPE ROUGE</b><br>", htmlB = "<b>EQUIPE BLEUE</b><br>";
+        players.forEach(p => {
+            const team = _teamMap.get(p.id);
+            if (team === 'A') htmlA += p.name + "<br>";
+            else if (team === 'B') htmlB += p.name + "<br>";
+        });
+        listA.innerHTML = htmlA;
+        listB.innerHTML = htmlB;
+    }
 }
 
 export function disposeFootMode() {
@@ -299,8 +362,18 @@ export function disposeFootMode() {
     for (const g of _goals) scene.remove(g.group);
     _goals = [];
     if (_ball) { scene.remove(_ball); _ball.geometry.dispose(); _ball.material.dispose(); _ball = null; }
-    _scoreEl?.remove(); _scoreEl = null;
-    _statusEl?.remove(); _statusEl = null;
+    
+    document.getElementById('foot-ui-container')?.remove();
+    _scoreEl = null;
+    _statusEl = null;
+
+    _teamIndicators.forEach(m => {
+        scene.remove(m);
+        m.geometry.dispose();
+        m.material.dispose();
+    });
+    _teamIndicators.clear();
+
     _teamMap.clear();
     setCameraFollow();
     scene.background = new THREE.Color(0x87ceeb);

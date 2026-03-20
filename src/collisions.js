@@ -119,3 +119,63 @@ export function updateCollisions(players, staticCars = [], restitutionMult = 1.0
         }
     }
 }
+
+/**
+ * Collisions avec les rochers (sphères) et blocs (AABB)
+ */
+export function updateEnvironmentCollisions(players, collidables) {
+    const list = Array.from(players.values()).filter(p => p.car);
+    if (!collidables || collidables.length === 0) return;
+
+    for (const p of list) {
+        for (const obj of collidables) {
+            // Collision Sphère (Bushes)
+            if (obj.userData.radius) {
+                const dx = p.car.position.x - obj.position.x;
+                const dz = p.car.position.z - obj.position.z;
+                const dist = Math.sqrt(dx*dx + dz*dz);
+                const minDist = obj.userData.radius + COLLISION_RADIUS;
+                
+                if (dist < minDist) {
+                    const nx = dx/dist, nz = dz/dist;
+                    const overlap = minDist - dist;
+                    p.car.position.x += nx * overlap;
+                    p.car.position.z += nz * overlap;
+                    
+                    // Rebond / Glisse - Plus fort pour les murs
+                    const vn = p.velocity.x * nx + p.velocity.z * nz;
+                    if (vn < 0) {
+                        // Annulation totale de la vitesse vers le mur + petit rebond
+                        p.velocity.x -= vn * nx * 1.8;
+                        p.velocity.z -= vn * nz * 1.8;
+                        // Pénalité de vitesse plus forte sur impact frontal
+                        p.carSpeed *= 0.85;
+                    }
+                }
+            }
+            // Collision Bloc (utilisé pour le muret)
+            else if (obj.userData.radius) {
+                const dx = p.car.position.x - obj.position.x;
+                const dz = p.car.position.z - obj.position.z;
+                const distSq = dx*dx + dz*dz;
+                const minDist = obj.userData.radius + COLLISION_RADIUS;
+
+                if (distSq < minDist * minDist) {
+                    const dist = Math.sqrt(distSq);
+                    const nx = dx/dist, nz = dz/dist;
+                    const overlap = minDist - dist;
+
+                    p.car.position.x += nx * overlap;
+                    p.car.position.z += nz * overlap;
+
+                    const vn = p.velocity.x * nx + p.velocity.z * nz;
+                    if (vn < 0) {
+                        p.velocity.x -= vn * nx * 1.8;
+                        p.velocity.z -= vn * nz * 1.8;
+                        p.carSpeed *= 0.85;
+                    }
+                }
+            }
+        }
+    }
+}

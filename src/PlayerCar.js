@@ -176,6 +176,14 @@ export class PlayerCar {
         });
     }
 
+    respawn(x = 0, y = 20, z = 0) {
+        if (!this.car) return;
+        this.car.position.set(x, y, z);
+        this.velocity.set(0, 0, 0);
+        this.carSpeed = 0;
+        this.verticalVelocity = 0;
+    }
+
     // ── Nettoyage ─────────────────────────────────────────────────────────────
 
     dispose() {

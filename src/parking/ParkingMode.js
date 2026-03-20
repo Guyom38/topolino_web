@@ -11,7 +11,7 @@ import {
     hideParkingUI, updateScoreSprites, disposeScoreSprites,
     showWrongWay, hideWrongWay,
 } from './ParkingUI.js';
-import { setParkingCamera } from '../camera.js';
+import { setParkingCamera, setCameraFixed } from '../camera.js';
 import { createParkingTerrain, disposeParkingTerrain } from './ParkingTerrain.js';
 
 export const RACE_DURATION = 60; // secondes
@@ -91,6 +91,7 @@ export async function initParkingMode(players) {
     }
 
     setParkingCamera();
+    setCameraFixed(0, 0, 0);
     initParkingUI();
     _phase     = 'racing';
     _startTime = performance.now();

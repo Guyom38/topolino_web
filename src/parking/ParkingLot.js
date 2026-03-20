@@ -247,14 +247,8 @@ export function createParkingLot() {
     for (const spot of SPOTS) {
         if (!spot.empty) continue;
         
-        let w = SPOT_HW * 2;
-        let h = SPOT_HD * 2;
-        if (spot.type === 'creneau') {
-            w = SPOT_HD * 2;
-            h = SPOT_HW * 2;
-        }
-
-        const spotGeo = new THREE.PlaneGeometry(w, h);
+        // Dimensions identiques pour tous les types : HW en X, HD en Z (monde)
+        const spotGeo = new THREE.PlaneGeometry(SPOT_HW * 2, SPOT_HD * 2);
         const sMat = new THREE.ShaderMaterial({
             uniforms: THREE.UniformsUtils.clone(hatchShader.uniforms),
             vertexShader: hatchShader.vertexShader,
@@ -264,9 +258,7 @@ export function createParkingLot() {
         });
         const sm = new THREE.Mesh(spotGeo, sMat);
         sm.rotation.x = -Math.PI / 2;
-        // Pour bataille (angle PI), le spotGeo PlaneGeometry s'aligne bien.
-        // Pour creneau (angle -PI/2), on ne le tourne pas ici car on a déjà inversé w/h.
-        sm.rotation.z = (spot.type === 'bataille') ? -spot.angle : 0;
+        sm.rotation.z = 0;
         sm.position.set(spot.x, 0.05, spot.z);
         scene.add(sm);
         meshes.push(sm);

@@ -42,9 +42,9 @@ const X_BATAILLE = [];
 for (let x = -26; x <= 26; x += 3.6) X_BATAILLE.push(x);
 const EMPTY_BATAILLE = new Set([2, 5, 8, 12, 14]);
 for (let i = 0; i < X_BATAILLE.length; i++) {
-    SPOTS.push({ 
-        id: _id++, x: X_BATAILLE[i], z: -6.5, angle: Math.PI, 
-        type: 'bataille', empty: EMPTY_BATAILLE.has(i), baseScore: 150 
+    SPOTS.push({
+        id: _id++, x: X_BATAILLE[i], z: -6.5, angle: Math.PI / 2,
+        type: 'bataille', empty: EMPTY_BATAILLE.has(i), baseScore: 150
     });
 }
 

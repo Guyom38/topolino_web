@@ -28,13 +28,19 @@ export function scorePlayer(player) {
         const localX = dx * cos - dz * sin;
         const localZ = dx * sin + dz * cos;
 
+        // Si l'axe avant du spot est sur X (angle ≈ ±PI/2), localX = offset Z-monde
+        // et localZ = offset X-monde → inverser HW/HD
+        const fwdIsX = Math.abs(Math.sin(spot.angle)) > 0.5;
+        const hw = fwdIsX ? SPOT_HD : SPOT_HW;
+        const hd = fwdIsX ? SPOT_HW : SPOT_HD;
+
         // Vérifier que la voiture est dans les limites (tolérance 180%)
-        const insideX = Math.abs(localX) < SPOT_HW * 1.8;
-        const insideZ = Math.abs(localZ) < SPOT_HD * 1.8;
+        const insideX = Math.abs(localX) < hw * 1.8;
+        const insideZ = Math.abs(localZ) < hd * 1.8;
         if (!insideX || !insideZ) continue;
 
         // Précision de position (0 = centre parfait, 1 = bord)
-        const posErr       = Math.sqrt((localX / SPOT_HW) ** 2 + (localZ / SPOT_HD) ** 2);
+        const posErr       = Math.sqrt((localX / hw) ** 2 + (localZ / hd) ** 2);
         const positionScore = Math.max(0, 1 - posErr) * 50;
 
         // Précision d'angle : comparaison avec l'angle de la place (marche arrière autorisée)

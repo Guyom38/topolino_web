@@ -12,6 +12,60 @@ let localPlayer = null;
 
 export function getLocalPlayer() { return localPlayer; }
 
+// ── Gestion des Gamepads (Manettes USB) ──────────────────────────────────────
+const SILLY_NAMES = ["Patate Douce", "Slip de Bain", "Grominet", "Yaourt Nature", "Pneu Crevé", "Cornichon", "Pastèque Galactique", "Radiateur", "Chaussette Sale", "Merguez Noire"];
+const gamepadPlayers = new Map(); // gamepadIndex -> playerId
+
+function _getRandomColor() {
+    return '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
+}
+
+export function pollGamepads() {
+    const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+    
+    for (let i = 0; i < gamepads.length; i++) {
+        const gp = gamepads[i];
+        if (!gp) {
+            // Déconnexion
+            if (gamepadPlayers.has(i)) {
+                _removePlayer(gamepadPlayers.get(i));
+                gamepadPlayers.delete(i);
+            }
+            continue;
+        }
+
+        // Limitation à 8 manettes max
+        if (gamepadPlayers.size >= 8 && !gamepadPlayers.has(i)) continue;
+
+        // Nouveau joueur manette
+        if (!gamepadPlayers.has(i)) {
+            const id = 'pad_' + i;
+            const name = SILLY_NAMES[Math.floor(Math.random() * SILLY_NAMES.length)];
+            const color = _getRandomColor();
+            _addRemote(id, name, color);
+            gamepadPlayers.set(i, id);
+            console.log(`[Gamepad] Manette détectée à l'index ${i}: ${name}`);
+        }
+
+        const p = players.get(gamepadPlayers.get(i));
+        if (!p) continue;
+
+        // Inputs : Analogique (axes 0 et 1) + Flèches (boutons 12, 13, 14, 15)
+        const DZ = 0.15; // Deadzone
+        const ax = gp.axes[0] || 0;
+        const ay = gp.axes[1] || 0;
+
+        p.keys.left  = ax < -DZ || gp.buttons[14]?.pressed;
+        p.keys.right = ax >  DZ || gp.buttons[15]?.pressed;
+        p.keys.up    = ay < -DZ || gp.buttons[12]?.pressed || gp.buttons[0]?.pressed; // A ou Croix
+        p.keys.down  = ay >  DZ || gp.buttons[13]?.pressed || gp.buttons[1]?.pressed; // B ou Rond
+        p.keys.handbrake = gp.buttons[2]?.pressed || gp.buttons[3]?.pressed || gp.buttons[5]?.pressed; // X, Y ou R1
+        
+        // Stocker la valeur analogique brute pour le braquage fluide
+        p.keys.jx = ax; 
+    }
+}
+
 // ── Initialisation ───────────────────────────────────────────────────────────
 
 export async function initMultiplayer() {
@@ -21,6 +75,7 @@ export async function initMultiplayer() {
     players.set(LOCAL_ID, localPlayer);
 
     await loadCarForPlayer(localPlayer);
+    localPlayer.respawn(0, 30, 0); // Apparition en hauteur
     localPlayer.tracks = createTrackSystem();
     localPlayer.shadow = createShadow();
     localPlayer.aura   = createAura();
@@ -99,6 +154,7 @@ async function _addRemote(id, name, color) {
     players.set(id, p);
 
     await loadCarForPlayer(p);
+    p.respawn((Math.random()-0.5)*10, 30, (Math.random()-0.5)*10);
     p.setLuggage(false); // Cacher le bagage par défaut
     p.tracks = createTrackSystem();
     p.shadow = createShadow();

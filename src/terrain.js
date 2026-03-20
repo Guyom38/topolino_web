@@ -25,19 +25,41 @@ const M_SCALE     = 1 / 280; // fréquence du masque montagne (zones isolées)
 const M_THRESHOLD = 0.62;    // seuil au-dessus duquel une montagne se forme
 
 export function getHeightAt(x, z) {
-    // Terrain de base (fBm 4 octaves)
+    const search = new URLSearchParams(window.location.search);
+    const isChase = search.get('mode') === 'chase';
+    const isFoot = search.get('mode') === 'foot';
+    
+    // Zone du terrain de foot : enfoncer le terrain pour laisser place à la pelouse du stade
+    if (isFoot) {
+        if (Math.abs(x) < 85 && Math.abs(z) < 45) return -2.0;
+    }
+
+    if (isChase) {
+        const limit = 75.0; // Augmenté de 70 à 75 pour supporter le muret
+        const distEdge = Math.max(Math.abs(x), Math.abs(z));
+        // Au-delà de l'île, on reste au niveau 0 pour boucher les trous
+        if (distEdge > limit) return 0.0;
+    }
+
+    const ampMult = isChase ? 2.5 : 1.0;
+    const dist = Math.sqrt(x*x + z*z);
+    const sizeMult = isChase ? Math.max(0, 1.0 - (dist / 120.0)) : 1.0;
+
     let v = 0.0, a = 1.0, f = H_SCALE;
     for (let i = 0; i < 4; i++) {
         v += a * smoothNoise(x * f, z * f);
         a *= 0.5;
         f *= 2.0;
     }
-    const base = (v / 1.875 - 0.5) * H_AMPLITUDE;
+    const base = (v / 1.875 - 0.5) * H_AMPLITUDE * ampMult * sizeMult;
 
-    // Masque montagne : zones élevées sont amplifiées 3×
     const mask = smoothNoise(x * M_SCALE, z * M_SCALE);
-    const t    = Math.max(0, (mask - M_THRESHOLD) / (1 - M_THRESHOLD)); // 0→1
-    return base + t * t * base * 2.0; // ajoute jusqu'à 2× la hauteur de base (= 3× total)
+    const t    = Math.max(0, (mask - M_THRESHOLD) / (1 - M_THRESHOLD));
+    const h    = base + t * t * base * 2.5;
+
+    // En mode poursuite, on surélève tout de 20m pour éviter que les vallées
+    // ne descendent sous le seuil de respawn (-15m)
+    return isChase ? h + 20.0 : h;
 }
 
 const EPS = 0.5;
@@ -62,8 +84,8 @@ export function getSlopeGrip(x, z) {
 }
 
 // --- Patches de terrain (3 recyclés) ---
-const PATCH_W = 240, PATCH_D = 300;
-const SEG_W   = 48,  SEG_D   = 60;
+const PATCH_W = 400, PATCH_D = 300;
+const SEG_W   = 32,  SEG_D   = 40;
 
 const GR = 0.28, GG = 0.52, GB = 0.15; // vert (plat)
 const BR = 0.42, BG = 0.28, BB = 0.12; // marron (pentu)
@@ -79,32 +101,29 @@ function recomputePatch(mesh) {
     const geo = mesh.geometry;
     const pos = geo.attributes.position;
     const col = geo.attributes.color;
+    const norm = geo.attributes.normal;
 
     for (let iz = 0; iz <= SEG_D; iz++) {
         for (let ix = 0; ix <= SEG_W; ix++) {
             const idx = iz * (SEG_W + 1) + ix;
-            // Après rotation.x = -π/2 sur le mesh :
-            //   worldX = pos.x,  worldZ = -pos.y + cz,  worldY = pos.z (la hauteur)
             const wx = pos.getX(idx);
             const wz = -pos.getY(idx) + cz;
             const h  = getHeightAt(wx, wz);
             pos.setZ(idx, h);
 
-            // Couleur selon pente (normale locale)
-            const nx2 = getHeightAt(wx - EPS, wz) - getHeightAt(wx + EPS, wz);
-            const nz2 = getHeightAt(wx, wz - EPS) - getHeightAt(wx, wz + EPS);
-            const ny2 = 2.0 * EPS;
-            const len = Math.sqrt(nx2 * nx2 + ny2 * ny2 + nz2 * nz2);
-            const nyN = ny2 / len;
+            // Calcul de la normale précise via getNormalAt
+            const n = getNormalAt(wx, wz);
+            // On mappe les axes pour la rotation du plan (X=-PI/2)
+            norm.setXYZ(idx, n.x, n.z, n.y);
 
-            const t = THREE.MathUtils.clamp((0.97 - nyN) / 0.12, 0, 1);
+            const t = THREE.MathUtils.clamp((0.97 - n.y) / 0.12, 0, 1);
             col.setXYZ(idx, GR + (BR - GR) * t, GG + (BG - GG) * t, GB + (BB - GB) * t);
         }
     }
 
     pos.needsUpdate = true;
     col.needsUpdate = true;
-    geo.computeVertexNormals();
+    norm.needsUpdate = true;
 }
 
 function createPatch(centerZ) {
@@ -128,7 +147,14 @@ const patches = [
     createPatch(-2 * PATCH_D),
 ];
 
+export function refreshTerrain() {
+    for (const p of patches) recomputePatch(p);
+}
+
 export function updateTerrain(carZ) {
+    const isChase = new URLSearchParams(window.location.search).get('mode') === 'chase';
+    if (isChase) return; // Pas de défilement en mode poursuite
+    
     for (const p of patches) {
         const cz = p.position.z;
         if (cz > carZ + PATCH_D) {

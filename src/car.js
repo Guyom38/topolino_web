@@ -92,6 +92,7 @@ export async function loadCarForPlayer(player) {
     });
 
     player.carVisual.add(clone);
+
     player.car = new THREE.Group();
     player.car.add(player.carVisual);
 

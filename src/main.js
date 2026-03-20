@@ -1,10 +1,11 @@
 import { scene, camera, renderer, sun } from './scene.js';
 import { updatePhysics } from './physics.js';
-import { updateCamera } from './camera.js';
-import { updateTerrain, getHeightAt } from './terrain.js';
-import { updateCollisions } from './collisions.js';
-import { players, initMultiplayer, getLocalPlayer } from './multiplayer.js';
+import { updateCamera, updateChaseCamera } from './camera.js';
+import { updateTerrain, getHeightAt, refreshTerrain } from './terrain.js';
+import { updateCollisions, updateEnvironmentCollisions } from './collisions.js';
+import { players, initMultiplayer, getLocalPlayer, pollGamepads } from './multiplayer.js';
 import { initUI, updateUI, setPlayerScore } from './ui.js';
+import { initChaseRocks, collidables, bushes } from './rocks.js';
 
 // ── Détection du mode ─────────────────────────────────────────────────────────
 const MODE = new URLSearchParams(window.location.search).get('mode') ?? 'drive';
@@ -17,6 +18,7 @@ async function startDriveMode() {
     function animate() {
         requestAnimationFrame(animate);
         const now = performance.now();
+        pollGamepads();
 
         for (const p of players.values()) {
             if (!p.car) continue;
@@ -51,7 +53,6 @@ async function startDriveMode() {
         updateUI(players);
         renderer.render(scene, camera);
     }
-
     animate();
 }
 
@@ -67,6 +68,7 @@ async function startParkingMode() {
     function animate() {
         requestAnimationFrame(animate);
         const now = performance.now();
+        pollGamepads();
 
         // Physique sur terrain plat
         const active = isParkingActive();
@@ -98,19 +100,49 @@ async function startParkingMode() {
 async function startChaseMode() {
     initUI();
     await initMultiplayer();
+    
+    refreshTerrain();
+    initChaseRocks();
 
-    // Le joueur local démarre avec le bagage (déjà fait dans initMultiplayer)
+    const fpsDiv = document.getElementById('fps-counter');
+    let lastTime = performance.now();
+    let frames   = 0;
 
     function animate() {
         requestAnimationFrame(animate);
         const now = performance.now();
+        pollGamepads();
+        
+        // --- FPS ---
+        frames++;
+        if (now > lastTime + 1000) {
+            const timeDiff = now - lastTime;
+            if (fpsDiv) fpsDiv.innerText = 'FPS: ' + Math.round((frames * 1000) / timeDiff);
+            lastTime = now;
+            frames = 0;
+        }
 
         for (const p of players.values()) {
             if (!p.car) continue;
-            updatePhysics(p, getHeightAt(p.car.position.x, p.car.position.z));
+
+            // --- Ralentissement Buissons ---
+            let inBush = false;
+            // Uniquement si on est au sol
+            if (p.onGround) {
+                for (const b of bushes) {
+                    const dx = p.car.position.x - b.position.x;
+                    const dz = p.car.position.z - b.position.z;
+                    if (dx*dx + dz*dz < b.userData.radius * b.userData.radius) { inBush = true; break; }
+                }
+            }
+
+            const terrainY = getHeightAt(p.car.position.x, p.car.position.z);
+            updatePhysics(p, terrainY);
+            if (inBush) p.carSpeed *= 0.93; // Freinage légèrement plus fort
         }
 
         updateCollisions(players);
+        updateEnvironmentCollisions(players, collidables);
 
         for (const p of players.values()) {
             if (!p.car) continue;
@@ -123,20 +155,21 @@ async function startChaseMode() {
             setPlayerScore(p.id, Math.floor(p.getLuggageScore()) + 's');
         }
 
-        updateCamera(players);
+        updateChaseCamera(players);
 
         const lp = getLocalPlayer();
         if (lp && lp.car) {
-            updateTerrain(lp.car.position.z);
-            sun.position.set(lp.car.position.x + 90, 45, lp.car.position.z + 30);
-            sun.target.position.set(lp.car.position.x, 0, lp.car.position.z);
+            const lx = lp.car.position.x;
+            const lz = lp.car.position.z;
+            updateTerrain(lz);
+            sun.position.set(lx + 120, 80, lz + 60);
+            sun.target.position.set(lx, 0, lz);
             sun.target.updateMatrixWorld();
         }
 
         updateUI(players);
         renderer.render(scene, camera);
     }
-
     animate();
 }
 
@@ -152,6 +185,7 @@ async function startTronMode() {
     function animate() {
         requestAnimationFrame(animate);
         const now = performance.now();
+        pollGamepads();
 
         for (const p of players.values()) {
             if (!p.car) continue;
@@ -171,7 +205,6 @@ async function startTronMode() {
         updateUI(players);
         renderer.render(scene, camera);
     }
-
     animate();
 }
 
@@ -187,6 +220,7 @@ async function startDerbyMode() {
     function animate() {
         requestAnimationFrame(animate);
         const now = performance.now();
+        pollGamepads();
 
         if (isDerbyActive()) {
             for (const p of players.values()) {
@@ -208,7 +242,6 @@ async function startDerbyMode() {
         updateUI(players);
         renderer.render(scene, camera);
     }
-
     animate();
 }
 
@@ -224,6 +257,7 @@ async function startBattleMode() {
     function animate() {
         requestAnimationFrame(animate);
         const now = performance.now();
+        pollGamepads();
 
         for (const p of players.values()) {
             if (!p.car) continue;
@@ -245,9 +279,11 @@ async function startBattleMode() {
 
         const lp = getLocalPlayer();
         if (lp && lp.car) {
-            updateTerrain(lp.car.position.z);
-            sun.position.set(lp.car.position.x + 90, 45, lp.car.position.z + 30);
-            sun.target.position.set(lp.car.position.x, 0, lp.car.position.z);
+            const lx = lp.car.position.x;
+            const lz = lp.car.position.z;
+            updateTerrain(lz);
+            sun.position.set(lx + 120, 80, lz + 60);
+            sun.target.position.set(lx, 0, lz);
             sun.target.updateMatrixWorld();
         }
 
@@ -255,7 +291,6 @@ async function startBattleMode() {
         updateUI(players);
         renderer.render(scene, camera);
     }
-
     animate();
 }
 
@@ -271,6 +306,7 @@ async function startFootMode() {
     function animate() {
         requestAnimationFrame(animate);
         const now = performance.now();
+        pollGamepads();
 
         for (const p of players.values()) {
             if (!p.car) continue;
@@ -290,7 +326,6 @@ async function startFootMode() {
         updateUI(players);
         renderer.render(scene, camera);
     }
-
     animate();
 }
 
