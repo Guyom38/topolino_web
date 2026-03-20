@@ -1,0 +1,128 @@
+import * as THREE from 'three';
+import { scene } from './scene.js';
+
+export const COLLISION_RADIUS    = 1.8;   // rayon de collision (unités monde)
+const       HIT_COOLDOWN         = 1200;  // ms min entre deux comptages de choc
+
+export class PlayerCar {
+    constructor(id, name, colorHex, isLocal = false) {
+        this.id       = id;
+        this.name     = name;
+        this.colorHex = colorHex;
+        this.colorInt = parseInt(colorHex.replace('#', ''), 16);
+        this.isLocal  = isLocal;
+
+        // ── Physique ──────────────────────────────────────────────────────────
+        this.carSpeed        = 0;
+        this.carAngle        = 0;
+        this.steeringAngle   = 0;
+        this.velocity        = new THREE.Vector3();
+        this.verticalVelocity = 0;
+        this.onGround        = true;
+        this.suspY           = [0, 0, 0, 0];
+        this.suspVel         = [0, 0, 0, 0];
+        this._suspInit       = false;
+
+        // ── Inputs ────────────────────────────────────────────────────────────
+        this.keys = { up: false, down: false, left: false, right: false };
+
+        // ── Three.js ─────────────────────────────────────────────────────────
+        this.car         = null;           // Group racine (position physique)
+        this.carVisual   = new THREE.Group(); // Group visuel (suspension, drift)
+        this.wheelsFront = [];
+        this.wheelsRear  = [];
+
+        // ── Système de touches ────────────────────────────────────────────────
+        this.hitCount        = 0;
+        this.invincibleUntil = 0;
+
+        // ── Label de nom ──────────────────────────────────────────────────────
+        this._nameSprite = null;
+        this._nameCanvas = null;
+
+        // ── Systèmes traces / ombre (injectés après chargement) ───────────────
+        this.tracks = null;
+        this.shadow = null;
+    }
+
+    // ── Invincibilité ─────────────────────────────────────────────────────────
+
+    onHit() {
+        const now = performance.now();
+        if (now < this.invincibleUntil) return;
+        this.hitCount++;
+        this.invincibleUntil = now + HIT_COOLDOWN;
+    }
+
+    // ── Label de nom ─────────────────────────────────────────────────────────
+
+    createNameLabel() {
+        const canvas  = document.createElement('canvas');
+        canvas.width  = 256;
+        canvas.height = 64;
+        this._nameCanvas = canvas;
+        this._drawName();
+
+        const tex    = new THREE.CanvasTexture(canvas);
+        const mat    = new THREE.SpriteMaterial({ map: tex, depthWrite: false, depthTest: false });
+        const sprite = new THREE.Sprite(mat);
+        sprite.scale.set(4.5, 1.1, 1);
+        sprite.renderOrder = 999;
+        this._nameSprite = sprite;
+        scene.add(sprite);
+    }
+
+    _drawName() {
+        const ctx = this._nameCanvas.getContext('2d');
+        ctx.clearRect(0, 0, 256, 64);
+        ctx.font         = 'bold 30px Arial';
+        ctx.textAlign    = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.strokeStyle  = 'rgba(0,0,0,0.9)';
+        ctx.lineWidth    = 6;
+        ctx.strokeText(this.name, 128, 32);
+        ctx.fillStyle = 'white';
+        ctx.fillText(this.name, 128, 32);
+    }
+
+    updateNameLabel() {
+        if (!this._nameSprite || !this.car) return;
+        this._nameSprite.position.set(
+            this.car.position.x,
+            this.car.position.y + (this.carVisual.position.y || 0) + 3.8,
+            this.car.position.z
+        );
+    }
+
+    setName(name) {
+        this.name = name;
+        if (this._nameCanvas) {
+            this._drawName();
+            this._nameSprite.material.map.needsUpdate = true;
+        }
+    }
+
+    setColor(colorHex) {
+        this.colorHex = colorHex;
+        this.colorInt = parseInt(colorHex.replace('#', ''), 16);
+        if (!this.car) return;
+        this.car.traverse(c => {
+            if (!c.isMesh) return;
+            const mats = Array.isArray(c.material) ? c.material : [c.material];
+            mats.forEach(m => { if (m.userData.isBodyColor) m.color.set(this.colorInt); });
+        });
+    }
+
+    // ── Nettoyage ─────────────────────────────────────────────────────────────
+
+    dispose() {
+        if (this.car)         scene.remove(this.car);
+        if (this._nameSprite) {
+            scene.remove(this._nameSprite);
+            this._nameSprite.material.map.dispose();
+            this._nameSprite.material.dispose();
+        }
+        if (this.shadow) this.shadow.dispose();
+        if (this.tracks) this.tracks.dispose();
+    }
+}

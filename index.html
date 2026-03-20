@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Topolino Car Game</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #87CEEB; font-family: 'Segoe UI', sans-serif; }
+        canvas { display: block; }
+
+        /* ── Scoreboard (haut-gauche) ── */
+        #scoreboard {
+            position: absolute; top: 10px; left: 10px;
+            display: flex; flex-direction: column; gap: 4px;
+            pointer-events: none;
+        }
+        .sb-row {
+            display: flex; align-items: center; gap: 7px;
+            background: rgba(0,0,0,0.45); border-radius: 20px;
+            padding: 4px 12px 4px 6px;
+            backdrop-filter: blur(4px);
+        }
+        .sb-row.sb-inv { opacity: 0.5; }
+        .sb-dot  { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+        .sb-name { color: #fff; font-size: 13px; font-weight: 600; max-width: 120px;
+                   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .sb-hits { color: #ffcc00; font-size: 12px; font-weight: 700; margin-left: auto; }
+
+        /* ── QR Code (haut-droite) ── */
+        #qr-wrap {
+            position: absolute; top: 10px; right: 10px;
+            background: rgba(255,255,255,0.92); border-radius: 10px;
+            padding: 8px 8px 4px;
+            display: flex; flex-direction: column; align-items: center; gap: 4px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+            pointer-events: none;
+        }
+        #qr-canvas { width: 96px; height: 96px; }
+        #qr-label  { font-size: 9px; color: #333; text-align: center; max-width: 96px;
+                     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        #qr-hint   { font-size: 10px; color: #555; font-weight: 600; }
+        #cam-debug {
+            position: absolute; bottom: 10px; left: 10px;
+            background: rgba(0,0,0,0.55); color: #0ff;
+            font-family: monospace; font-size: 12px; line-height: 1.7;
+            padding: 6px 10px; border-radius: 6px;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Scoreboard -->
+    <div id="scoreboard"></div>
+
+    <!-- QR Code -->
+    <div id="qr-wrap">
+        <div id="qr-hint">📱 Rejoindre</div>
+        <div id="qr-canvas"></div>
+        <div id="qr-label">chargement…</div>
+    </div>
+
+    <!-- Debug caméra (bas-gauche) -->
+    <div id="cam-debug">—</div>
+
+    <!-- Socket.IO (non-module, disponible comme global `io`) -->
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+
+    <!-- QRCode.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+    <!-- ES module shims + importmap -->
+    <script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module" src="src/main.js"></script>
+</body>
+</html>

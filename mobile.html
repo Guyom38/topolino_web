@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Topolino — Manette</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; touch-action: none;
+            user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+        body { background: #0d0d1a; color: #fff; font-family: 'Segoe UI', sans-serif;
+               overflow: hidden; width: 100vw; height: 100vh; }
+
+        /* ── Layouts ── */
+        #landscape, #portrait { display: none; width: 100vw; height: 100vh; }
+        @media (orientation: landscape) { #landscape { display: flex; } }
+        @media (orientation: portrait)  { #portrait  { display: flex; } }
+
+        /* ── LANDSCAPE : manette ── */
+        #landscape {
+            align-items: center; justify-content: center; gap: 40px;
+            padding: 16px 28px;
+            background: radial-gradient(ellipse at center, #1a1a3e 0%, #0d0d1a 100%);
+        }
+
+        /* Joystick */
+        #joystick-zone { width: 200px; height: 200px; position: relative; flex-shrink: 0; }
+        #joystick-base {
+            width: 200px; height: 200px; border-radius: 50%;
+            background: rgba(255,255,255,0.05);
+            border: 2px solid rgba(255,255,255,0.15);
+            position: absolute;
+        }
+        #joystick-thumb {
+            width: 72px; height: 72px; border-radius: 50%;
+            background: radial-gradient(circle at 35% 35%, #ffffff, #888);
+            position: absolute; top: 64px; left: 64px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+        }
+
+        /* Infos centrales */
+        #center-info { text-align: center; }
+        #player-badge {
+            display: inline-flex; align-items: center; gap: 10px;
+            background: rgba(255,255,255,0.08); border-radius: 24px;
+            padding: 8px 18px; margin-bottom: 8px;
+        }
+        #player-dot { width: 18px; height: 18px; border-radius: 50%; background: #aaa; }
+        #player-name { font-size: 18px; font-weight: 700; }
+        #status { font-size: 12px; opacity: 0.5; }
+
+        /* ── PORTRAIT : configuration ── */
+        #portrait {
+            flex-direction: column; align-items: center; justify-content: center;
+            gap: 22px; padding: 32px;
+            background: radial-gradient(ellipse at center, #1a1a3e 0%, #0d0d1a 100%);
+        }
+        #portrait h2 { font-size: 24px; font-weight: 700; }
+        .cfg-block { width: 100%; max-width: 320px; }
+        .cfg-block label { display: block; font-size: 13px; opacity: 0.55; margin-bottom: 8px; text-transform: uppercase; letter-spacing: .05em; }
+        .cfg-block input[type="text"] {
+            width: 100%; padding: 13px 16px;
+            background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.18);
+            border-radius: 14px; color: white; font-size: 18px; outline: none;
+        }
+        #palette { display: flex; flex-wrap: wrap; gap: 11px; }
+        .swatch {
+            width: 44px; height: 44px; border-radius: 50%; cursor: pointer;
+            border: 3px solid transparent; transition: transform .1s, border-color .1s;
+        }
+        .swatch.on { border-color: #fff; transform: scale(1.25); }
+        #btn-join {
+            width: 100%; max-width: 320px; padding: 16px;
+            background: linear-gradient(145deg, #7c3aed, #9b59b6);
+            border: none; border-radius: 16px;
+            color: white; font-size: 20px; font-weight: 700; cursor: pointer;
+        }
+        #btn-join:active { filter: brightness(.8); }
+        #portrait-status { font-size: 13px; opacity: 0.45; text-align: center; }
+    </style>
+</head>
+<body>
+
+<!-- PORTRAIT : Configuration -->
+<div id="portrait">
+    <h2>🚗 Topolino</h2>
+    <div class="cfg-block">
+        <label>Votre nom</label>
+        <input type="text" id="inp-name" placeholder="Joueur" maxlength="20" autocomplete="off" autocorrect="off">
+    </div>
+    <div class="cfg-block">
+        <label>Couleur du véhicule</label>
+        <div id="palette"></div>
+    </div>
+    <button id="btn-join">Rejoindre →</button>
+    <div id="portrait-status">Passez en paysage pour conduire</div>
+</div>
+
+<!-- LANDSCAPE : Manette -->
+<div id="landscape">
+    <div id="joystick-zone">
+        <div id="joystick-base"></div>
+        <div id="joystick-thumb"></div>
+    </div>
+    <div id="center-info">
+        <div id="player-badge">
+            <div id="player-dot"></div>
+            <span id="player-name">—</span>
+        </div>
+        <div id="status">Non connecté</div>
+    </div>
+</div>
+
+<script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+<script>
+const COLORS = [
+    '#e74c3c','#e67e22','#f1c40f','#2ecc71','#1abc9c',
+    '#3498db','#9b59b6','#e91e63','#ff5722','#00bcd4',
+    '#8bc34a','#ff9800','#ecf0f1','#95a5a6','#ffffff','#34495e'
+];
+
+// ── Palette ──────────────────────────────────────────────────────────────────
+let selColor = COLORS[0];
+const paletteEl = document.getElementById('palette');
+COLORS.forEach(c => {
+    const s = document.createElement('div');
+    s.className = 'swatch' + (c === selColor ? ' on' : '');
+    s.style.background = c;
+    s.addEventListener('click', () => {
+        document.querySelectorAll('.swatch').forEach(x => x.classList.remove('on'));
+        s.classList.add('on');
+        selColor = c;
+    });
+    paletteEl.appendChild(s);
+});
+
+// ── État ─────────────────────────────────────────────────────────────────────
+let sock = null, joined = false;
+let jx = 0, jy = 0;
+const DEAD = 0.12, MAX_R = 80;
+const thumb = document.querySelector('#joystick-thumb');
+
+// ── Socket ───────────────────────────────────────────────────────────────────
+function connect(name, color) {
+    if (sock) sock.disconnect();
+    sock = io(window.location.origin);
+
+    sock.on('connect', () => {
+        document.getElementById('portrait-status').textContent = 'Connexion…';
+        sock.emit('register_mobile', { name, color });
+    });
+    sock.on('connect_error', err => {
+        document.getElementById('portrait-status').textContent = '❌ Erreur réseau : ' + err.message;
+    });
+    sock.on('assigned', d => {
+        joined = true;
+        document.getElementById('portrait-status').textContent = '✅ Connecté ! Passez en paysage pour conduire.';
+        document.getElementById('player-name').textContent = d.name;
+        document.getElementById('player-dot').style.background = d.color;
+        document.getElementById('status').textContent = '✅ En jeu !';
+        startHB();
+    });
+    sock.on('game_full', () => {
+        document.getElementById('portrait-status').textContent = '❌ Partie complète (16/16)';
+    });
+    sock.on('disconnect', () => {
+        document.getElementById('portrait-status').textContent = '⚠️ Déconnecté — Rescannez le QR code';
+        document.getElementById('status').textContent = '⚠️ Déconnecté';
+        joined = false; stopHB();
+    });
+}
+
+let hbTimer = null;
+function startHB() { stopHB(); hbTimer = setInterval(() => sock && joined && sock.emit('heartbeat'), 5000); }
+function stopHB()  { if (hbTimer) { clearInterval(hbTimer); hbTimer = null; } }
+
+// ── Rejoindre ─────────────────────────────────────────────────────────────────
+document.getElementById('btn-join').addEventListener('click', () => {
+    const name = document.getElementById('inp-name').value.trim() || 'Joueur';
+    document.getElementById('portrait-status').textContent = 'Connexion en cours…';
+    connect(name, selColor);
+});
+
+// ── Envoi inputs (~30 fps) ────────────────────────────────────────────────────
+setInterval(() => {
+    if (sock && joined) sock.emit('input', { jx, jy });
+}, 33);
+
+// ── Joystick ──────────────────────────────────────────────────────────────────
+const zone = document.getElementById('joystick-zone');
+let jOrigin = null;
+
+zone.addEventListener('touchstart', e => {
+    e.preventDefault();
+    const t = e.changedTouches[0];
+    const r = zone.getBoundingClientRect();
+    jOrigin = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+}, { passive: false });
+
+zone.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (!jOrigin) return;
+    const t = e.changedTouches[0];
+    let dx = t.clientX - jOrigin.x;
+    let dy = t.clientY - jOrigin.y;
+    const d = Math.sqrt(dx*dx + dy*dy);
+    if (d > MAX_R) { dx *= MAX_R/d; dy *= MAX_R/d; }
+    // Courbe quadratique : précis au centre, plein régime aux bords
+    const rx = dx / MAX_R, ry = dy / MAX_R;
+    jx = Math.sign(rx) * rx * rx;
+    jy = Math.sign(ry) * ry * ry;
+    thumb.style.transform = `translate(${dx}px,${dy}px)`;
+}, { passive: false });
+
+['touchend','touchcancel'].forEach(ev => zone.addEventListener(ev, e => {
+    e.preventDefault();
+    jOrigin = null; jx = 0; jy = 0;
+    thumb.style.transform = '';
+}, { passive: false }));
+
+// ── Reset joystick on orientation change ──────────────────────────────────────
+window.addEventListener('orientationchange', () => {
+    jOrigin = null; jx = 0; jy = 0; thumb.style.transform = '';
+});
+</script>
+</body>
+</html>

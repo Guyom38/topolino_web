@@ -1,0 +1,15 @@
+export const config = {
+    acceleration: 0.0044,
+    deceleration: 0.985,
+    braking: 0.016,
+    maxSpeed: 0.58,
+    steeringLimit: 0.5,
+    steeringSpeed: 0.15,
+    grip: 0.93,
+    wheelBase: 3.5,
+    carColor: 0xB7D1C4,
+    wheelSpinFactor: 1.8,
+    trackWidth: 0.38,
+    gravity: 0.015,
+    slopeStrength: 0.016,
+};

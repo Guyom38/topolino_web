@@ -1,0 +1,128 @@
+## enjoliv:   new THREE.MeshStandardMaterial({ color: 0xD8D8D8, roughness: 0.25, metalness: 0.50 }),
+z_roue_arriere_droite_jante_int
+z_roue_arriere_gauche_jante_int
+z_roue_avant_droite_jante_int
+z_roue_avant_gauche_jante_int
+lumineux_avant
+lumineux_avant_001
+
+
+## gris:      new THREE.MeshStandardMaterial({ color: 0x8A8A8A, roughness: 0.30, metalness: 0.65 }),
+feux_avant
+feux_avant_001
+feux_avant_spot
+logo_arriere_fiat
+logo_avant_fiat
+parchoque_arriere
+parchoque_avant
+roue_avant_droite_axe 
+roue_avant_droite_enjoliver 
+roue_avant_gauche_axes
+roue_avant_gauche_enjoliver 
+roue_arriere_gauche_axe 
+roue_arriere_gauche_enjoliver 
+roue_arriere_droite_axe 
+roue_arriere_droite_enjoliver 
+support_bagage
+phares_arriere_stop_001
+phares_arriere_stop_002
+phares_arrieres
+
+
+## grisFonce: new THREE.MeshStandardMaterial({ color: 0x3A3A3A, roughness: 0.40, metalness: 0.55 }),
+z_support_bagage_bloc
+z_support_bagage_bloc_001
+bas_de_caisse
+cache_moteur
+essuie_glace
+interieur_habitacle
+roue_arriere_droite_jante_ext
+roue_arriere_droite_pneu
+roue_arriere_gauche_jante_ext
+roue_arriere_gauche_pneu
+roue_avant_droite_jante_ext
+roue_avant_droite_pneu
+roue_avant_gauche_jante_ext
+roue_avant_gauche_pneu
+z_interieur 
+
+## toit:      new THREE.MeshStandardMaterial({ color: 0x0F1520, roughness: 0.60, metalness: 0.10 }),
+y_carrosserie_arriere 
+y_carrosserie_arriere_001
+y_carrosserie_avant
+y_carrosserie_avant_001
+y_carrosserie_laterales
+y_carrosserie_portieres
+y_carrosserie_retros
+y_carrosserie_toit
+y_carrosserie_toit_001
+
+
+## rouge:     new THREE.MeshStandardMaterial({ color: 0xCC1111, roughness: 0.35, metalness: 0.10, emissive: new THREE.Color(0x220000) }),
+lumineux_arriere_parchoque
+phares_arriere_stop
+
+##leather:   new THREE.MeshStandardMaterial({ map: texLeather, roughness: 0.80, metalness: 0.0 }),
+bagage_ceinture
+bagage_sangles
+bagage
+
+##fabric:    new THREE.MeshStandardMaterial({ map: texFabric,  roughness: 0.95, metalness: 0.0 }),
+bagage_001
+
+##vitre:     new THREE.MeshStandardMaterial({ color: 0x99CCDD, roughness: 0.05, metalness: 0.10, transparent: true, opacity: 0.30, depthWrite: false }),
+y_carrosserie_vitres_laterales
+feux_avant_vitres
+vitre_arriere 
+vitre_avant 
+vitre_toit 
+vitres_laterales 
+vitres_portieres 
+
+
+## Couleur Joueur
+logo_arriere_topolino
+logo_avant_topolino 
+x_carrosserie_arriere 
+x_carrosserie_avant 
+x_carrosserie_bout_arriere 
+x_carrosserie_laterale_arriere 
+x_carrosserie_laterale_avant 
+x_portiere_droite 
+x_portiere_gauche 
+serrure_droite
+serrure_gauche
+
+## couleur blanc
+italie_blanc
+italie_blanc_001
+
+## couleur rouge
+italie_rouge
+italie_rouge_001
+lumineux_plaque
+lumineux_portiere_droite
+lumineux_portiere_gauche
+
+## couleur verte
+italie_vert
+italie_vert_001
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+z_lumineux_arriere_parchoque_001
+z_lumineux_avant_002
+
