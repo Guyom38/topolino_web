@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Topolino Controller</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #000; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; width: 100vw; }
+        
+        #app-container {
+            width: 1080px; height: 1920px;
+            background-color: #1a1a2e;
+            position: absolute;
+            transform-origin: top left;
+            display: flex; flex-direction: column;
+            color: white; overflow: hidden;
+        }
+
+        .screen { display: none; flex-direction: column; width: 100%; height: 100%; padding: 80px 60px; }
+        .screen.active { display: flex; }
+
+        h1 { font-size: 80px; text-align: center; margin-bottom: 60px; color: #B7D1C4; text-transform: uppercase; letter-spacing: 5px; }
+        h2 { font-size: 60px; text-align: center; margin-bottom: 40px; color: #fff; }
+
+        .input-group { margin-bottom: 60px; }
+        label { font-size: 40px; display: block; margin-bottom: 20px; color: #aaa; }
+        input[type="text"] { width: 100%; height: 120px; font-size: 50px; border-radius: 20px; border: none; padding: 0 40px; background: #2a2a4a; color: white; outline: none; }
+        input[type="color"] { width: 100%; height: 150px; border: none; border-radius: 20px; background: none; cursor: pointer; }
+        
+        .btn { width: 100%; height: 150px; font-size: 55px; font-weight: bold; border-radius: 40px; border: none; background: #B7D1C4; color: #1a1a2e; cursor: pointer; transition: transform 0.1s; margin-top: auto; }
+        .btn:active { transform: scale(0.95); }
+        .btn.secondary { background: #4a4a6a; color: white; margin-top: 40px;}
+
+        #camera-container {
+            position: relative; width: 100%; height: 960px;
+            background: #000; border-radius: 40px; overflow: hidden; margin-bottom: 40px;
+            display: flex; justify-content: center; align-items: center;
+        }
+        #video-feed { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+        #ghost-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; justify-content: center; align-items: center;
+            opacity: 0.5; pointer-events: none;
+        }
+        #expression-title { position: absolute; top: 40px; width: 100%; text-align: center; font-size: 60px; font-weight: bold; color: yellow; text-shadow: 0 5px 10px rgba(0,0,0,0.8); z-index: 10; }
+        
+        #capture-btn {
+            width: 200px; height: 200px; border-radius: 50%; background: white; border: 15px solid #aaa;
+            margin: 0 auto 40px auto; cursor: pointer; flex-shrink: 0;
+        }
+        #error-msg { font-size: 30px; color: #ff4a4a; text-align: center; margin-top: 20px; display: none; }
+
+        .thumbnails-container { display: flex; gap: 20px; overflow-x: auto; padding-bottom: 20px; height: 250px; margin-top: 20px; }
+        .thumb-wrapper {
+            position: relative; width: 180px; height: 180px; border-radius: 20px; border: 4px solid #4a4a6a; overflow: hidden; flex-shrink: 0;
+            display: flex; justify-content: center; align-items: center; background: #2a2a4a;
+        }
+        .thumb-wrapper.done { border-color: #B7D1C4; }
+        .thumb-wrapper img { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+        .thumb-label { position: absolute; bottom: 0; width: 100%; background: rgba(0,0,0,0.7); text-align: center; font-size: 24px; padding: 5px 0; }
+        .thumb-wrapper.active { border-color: yellow; box-shadow: 0 0 20px yellow; }
+
+        #joystick-area { flex-grow: 1; border: 4px dashed #4a4a6a; border-radius: 40px; display: flex; justify-content: center; align-items: center; font-size: 50px; color: #4a4a6a;}
+    </style>
+</head>
+<body>
+
+    <div id="app-container">
+        <!-- ECRAN 1 : CONNEXION -->
+        <div id="screen-login" class="screen active">
+            <h1>Topolino</h1>
+            <h2>Identification</h2>
+            <div class="input-group">
+                <label>Pseudo de Pilote</label>
+                <input type="text" id="input-pseudo" placeholder="Ex: Luigi">
+            </div>
+            <div class="input-group">
+                <label>Couleur du Véhicule</label>
+                <input type="color" id="input-color" value="#B7D1C4">
+            </div>
+            <button class="btn" onclick="startSetup()">SUIVANT</button>
+        </div>
+
+        <!-- ECRAN 2 : SCAN FACIAL -->
+        <div id="screen-camera" class="screen">
+            <h2>Scan Facial</h2>
+            <p style="font-size: 35px; text-align: center; margin-bottom: 40px; color: #aaa;">Prenez 6 photos pour vos émotions en jeu !</p>
+            
+            <div id="camera-container">
+                <div id="expression-title">CHARGEMENT...</div>
+                <video id="video-feed" autoplay playsinline></video>
+                <div id="ghost-overlay"></div>
+                <div id="error-msg">⚠️ Erreur Caméra : Accès refusé ou non sécurisé (HTTP). Utilisez HTTPS ou localhost.</div>
+            </div>
+
+            <div id="capture-btn" onclick="takePhoto()"></div>
+
+            <div class="thumbnails-container" id="thumbnails-list"></div>
+
+            <button class="btn" id="btn-finish-camera" onclick="finishCamera()" style="display:none;">VALIDER</button>
+        </div>
+
+        <!-- ECRAN 3 : MANETTE -->
+        <div id="screen-controller" class="screen">
+            <h2 id="hud-pseudo">Joueur</h2>
+            <div id="joystick-area">MANETTE TACTILE (PRÊT)</div>
+            <button class="btn secondary" onclick="resetSession()">DÉCONNEXION</button>
+        </div>
+    </div>
+
+    <canvas id="capture-canvas" style="display:none;"></canvas>
+    <!-- Fallback natif si getUserMedia est bloqué -->
+    <input type="file" id="fallback-camera" accept="image/*" capture="user" style="display:none;" onchange="handleFallbackPhoto(event)">
+
+    <script>
+        function resizeApp() {
+            const container = document.getElementById('app-container');
+            const targetWidth = 1080; const targetHeight = 1920;
+            const scale = Math.min(window.innerWidth / targetWidth, window.innerHeight / targetHeight);
+            container.style.transform = `scale(${scale})`;
+            container.style.left = `${(window.innerWidth - targetWidth * scale) / 2}px`;
+            container.style.top = `${(window.innerHeight - targetHeight * scale) / 2}px`;
+        }
+        window.addEventListener('resize', resizeApp); resizeApp();
+
+        function showScreen(id) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+        }
+
+        const session = { pseudo: '', color: '#B7D1C4', id: '', photos: {} };
+
+        window.onload = () => {
+            if (localStorage.getItem('topolino_pseudo')) {
+                document.getElementById('input-pseudo').value = localStorage.getItem('topolino_pseudo');
+                document.getElementById('input-color').value = localStorage.getItem('topolino_color') || '#B7D1C4';
+                session.id = localStorage.getItem('topolino_id') || 'player_' + Math.random().toString(36).substr(2, 9);
+            } else {
+                session.id = 'player_' + Math.random().toString(36).substr(2, 9);
+            }
+        };
+
+        function startSetup() {
+            session.pseudo = document.getElementById('input-pseudo').value.trim() || 'Pilote';
+            session.color = document.getElementById('input-color').value;
+            localStorage.setItem('topolino_pseudo', session.pseudo);
+            localStorage.setItem('topolino_color', session.color);
+            localStorage.setItem('topolino_id', session.id);
+            
+            showScreen('screen-camera');
+            initCameraSetup();
+        }
+
+        function resetSession() { localStorage.clear(); location.reload(); }
+
+        const expressions = [
+            { id: 'normal', label: 'NORMAL', svg: '<ellipse cx="50" cy="50" rx="30" ry="40" fill="none" stroke="white" stroke-width="2"/><line x1="40" y1="65" x2="60" y2="65" stroke="white" stroke-width="2"/>' },
+            { id: 'colere', label: 'COLÈRE', svg: '<ellipse cx="50" cy="50" rx="30" ry="40" fill="none" stroke="white" stroke-width="2"/><path d="M 35 35 L 45 40 M 65 35 L 55 40" stroke="white" stroke-width="2"/><path d="M 40 70 Q 50 60 60 70" fill="none" stroke="white" stroke-width="2"/>' },
+            { id: 'triste', label: 'TRISTE', svg: '<ellipse cx="50" cy="50" rx="30" ry="40" fill="none" stroke="white" stroke-width="2"/><path d="M 35 40 L 45 35 M 65 40 L 55 35" stroke="white" stroke-width="2"/><path d="M 40 70 Q 50 60 60 70" fill="none" stroke="white" stroke-width="2"/>' },
+            { id: 'excite', label: 'EXCITÉ', svg: '<ellipse cx="50" cy="50" rx="30" ry="40" fill="none" stroke="white" stroke-width="2"/><circle cx="40" cy="40" r="5" fill="white"/><circle cx="60" cy="40" r="5" fill="white"/><path d="M 35 60 Q 50 80 65 60 Z" fill="none" stroke="white" stroke-width="2"/>' },
+            { id: 'concentre', label: 'CONCENTRÉ', svg: '<ellipse cx="50" cy="50" rx="30" ry="40" fill="none" stroke="white" stroke-width="2"/><line x1="35" y1="40" x2="45" y2="40" stroke="white" stroke-width="2"/><line x1="55" y1="40" x2="65" y2="40" stroke="white" stroke-width="2"/><circle cx="50" cy="65" r="3" fill="white"/>' },
+            { id: 'desabuse', label: 'DÉSABUSÉ', svg: '<ellipse cx="50" cy="50" rx="30" ry="40" fill="none" stroke="white" stroke-width="2"/><line x1="35" y1="38" x2="45" y2="40" stroke="white" stroke-width="2"/><line x1="65" y1="38" x2="55" y2="40" stroke="white" stroke-width="2"/><line x1="40" y1="65" x2="60" y2="65" stroke="white" stroke-width="2"/>' }
+        ];
+
+        let currentExprIndex = 0;
+        let stream = null;
+
+        async function initCameraSetup() {
+            renderThumbnails();
+            updateGhost();
+            try {
+                // Tente d'accéder à la caméra en direct
+                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+                document.getElementById('video-feed').srcObject = stream;
+                document.getElementById('error-msg').style.display = 'none';
+            } catch (err) {
+                // Mode Fallback (Réseau local HTTP sans HTTPS)
+                console.warn("Caméra live bloquée. Passage en mode capture native.");
+                document.getElementById('video-feed').style.display = 'none';
+                document.getElementById('ghost-overlay').style.display = 'none';
+                
+                const errMsg = document.getElementById('error-msg');
+                errMsg.style.display = 'block';
+                errMsg.style.color = '#B7D1C4';
+                errMsg.innerHTML = "Caméra Live non dispo sur ce réseau.<br><br>Appuyez sur le bouton blanc pour ouvrir l'appareil photo de votre téléphone.";
+            }
+        }
+
+        function renderThumbnails() {
+            const container = document.getElementById('thumbnails-list');
+            container.innerHTML = '';
+            expressions.forEach((exp, index) => {
+                const isDone = session.photos[exp.id];
+                const isActive = index === currentExprIndex;
+                const el = document.createElement('div');
+                el.className = `thumb-wrapper ${isDone ? 'done' : ''} ${isActive ? 'active' : ''}`;
+                el.innerHTML = isDone ? `<img src="${session.photos[exp.id]}">` : `<span style="font-size: 50px; color:#aaa">?</span>`;
+                el.innerHTML += `<div class="thumb-label">${exp.label}</div>`;
+                el.onclick = () => { currentExprIndex = index; updateGhost(); renderThumbnails(); };
+                container.appendChild(el);
+            });
+            const allDone = expressions.every(exp => session.photos[exp.id]);
+            document.getElementById('btn-finish-camera').style.display = allDone ? 'block' : 'none';
+        }
+
+        function updateGhost() {
+            if (currentExprIndex >= expressions.length) return;
+            const exp = expressions[currentExprIndex];
+            document.getElementById('expression-title').innerText = exp.label;
+            document.getElementById('ghost-overlay').innerHTML = `<svg viewBox="0 0 100 100" width="100%" height="100%">${exp.svg}</svg>`;
+        }
+
+        function takePhoto() {
+            if (currentExprIndex >= expressions.length) return;
+            
+            // Si pas de flux live (mode HTTP), on ouvre la caméra native
+            if (!stream) {
+                document.getElementById('fallback-camera').click();
+                return;
+            }
+
+            const video = document.getElementById('video-feed');
+            const canvas = document.getElementById('capture-canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = 512; canvas.height = 512;
+            const minDim = Math.min(video.videoWidth, video.videoHeight);
+            ctx.translate(canvas.width, 0); ctx.scale(-1, 1);
+            ctx.drawImage(video, (video.videoWidth-minDim)/2, (video.videoHeight-minDim)/2, minDim, minDim, 0, 0, canvas.width, canvas.height);
+            
+            saveAndNext(canvas.toDataURL('image/jpeg', 0.8));
+        }
+
+        function handleFallbackPhoto(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.getElementById('capture-canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = 512; canvas.height = 512;
+                    
+                    // Recadrage carré centré
+                    const minDim = Math.min(img.width, img.height);
+                    const startX = (img.width - minDim) / 2;
+                    const startY = (img.height - minDim) / 2;
+                    
+                    // Sur mobile natif, l'image est souvent déjà dans le bon sens, pas de miroir
+                    ctx.clearRect(0, 0, 512, 512);
+                    ctx.drawImage(img, startX, startY, minDim, minDim, 0, 0, canvas.width, canvas.height);
+                    
+                    saveAndNext(canvas.toDataURL('image/jpeg', 0.8));
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function saveAndNext(dataUrl) {
+            session.photos[expressions[currentExprIndex].id] = dataUrl;
+            
+            // Chercher la prochaine photo non faite
+            let nextIndex = currentExprIndex + 1;
+            while (nextIndex < expressions.length && session.photos[expressions[nextIndex].id]) {
+                nextIndex++;
+            }
+            currentExprIndex = Math.min(nextIndex, expressions.length - 1);
+            
+            renderThumbnails(); 
+            updateGhost();
+        }
+
+        async function finishCamera() {
+            if (stream) stream.getTracks().forEach(t => t.stop());
+            
+            const btn = document.getElementById('btn-finish-camera');
+            btn.innerText = "ENVOI EN COURS...";
+            btn.disabled = true;
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(session)
+                });
+                
+                if (response.ok) {
+                    console.log("Photos envoyées avec succès !");
+                    document.getElementById('hud-pseudo').innerText = session.pseudo;
+                    document.getElementById('hud-pseudo').style.color = session.color;
+                    showScreen('screen-controller');
+                } else {
+                    alert("Erreur lors de l'envoi des photos au serveur.");
+                    btn.innerText = "VALIDER";
+                    btn.disabled = false;
+                }
+            } catch (err) {
+                console.error(err);
+                alert("Impossible de contacter le serveur.");
+                btn.innerText = "VALIDER";
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>

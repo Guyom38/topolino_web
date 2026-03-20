@@ -15,7 +15,7 @@ const _AZ = new THREE.Vector3(0, 0, 1);
 const _qSteer = new THREE.Quaternion();
 const _qSpin  = new THREE.Quaternion();
 
-export function updatePhysics(p, terrainY) {
+export function updatePhysics(p, terrainY, getY = undefined) {
     const { keys } = p;
 
     // --- Braquage ---
@@ -32,7 +32,7 @@ export function updatePhysics(p, terrainY) {
     // (braquage composé avec le spin plus bas — pas d'assignation Euler ici)
 
     // --- Suspension (avant physique car on a besoin de slope) ---
-    const { bodyY, pitch, suspRoll, slope } = updateSuspension(p);
+    const { bodyY, pitch, suspRoll, slope } = updateSuspension(p, getY);
 
     // --- Vitesse + pente ---
     if (keys.up)        p.carSpeed += config.acceleration;

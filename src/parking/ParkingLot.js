@@ -1,237 +1,234 @@
-// ── Géométrie 3D du parking ───────────────────────────────────────────────────
+// ── Géométrie 3D du parking — disposition paysage ────────────────────────────
 import * as THREE from 'three';
 import { scene } from '../scene.js';
-import { SPOTS, SPOT_HW, SPOT_HD } from './ParkingSpots.js';
+import { SPOTS, SPOT_HW, SPOT_HD, STARTING_POSITIONS } from './ParkingSpots.js';
 
-// Dimensions du plan de texture
-const TEX_W = 1024;
-const TEX_H = 1024;
+// ── Coordonnées monde couvertes par la texture ────────────────────────────────
+// PlaneGeometry(80, 48) centré en (0, 0.01, 2) → X=[-40,40], Z=[-22,26]
+const WX0 = -40, WX1 = 40, WW = 80;
+const WZ0 =  26, WZ1 = -22, WH = 48;  // Z décroit (nord)
+const TW  = 2048, TH = 1024;
 
-// Étendue monde couverte par le plan principal
-// PlaneGeometry(44, 60) centré en (0, 0.01, 4) → X=[-22,22], Z=[-26,34]
-const WORLD_X_MIN = -22, WORLD_X_MAX = 22; // largeur 44
-const WORLD_Z_MIN = -26, WORLD_Z_MAX = 34; // hauteur 60
-const WORLD_W = WORLD_X_MAX - WORLD_X_MIN;
-const WORLD_H = WORLD_Z_MAX - WORLD_Z_MIN;
+function cx(wx) { return (wx - WX0) / WW * TW; }
+function cy(wz) { return (WZ0 - wz) / WH * TH; }
 
-// Coordonnées canvas depuis coordonnées monde
-function cx(wx) { return (wx - WORLD_X_MIN) / WORLD_W * TEX_W; }
-function cy(wz) { return (WORLD_Z_MAX - wz) / WORLD_H * TEX_H; }
-
-// Dessine le rectangle d'une place de parking
-function drawSpotRect(ctx, spot, strokeStyle, lineWidth) {
-    const hw = SPOT_HW, hd = SPOT_HD;
+// ── Dessin du rectangle d'une place ──────────────────────────────────────────
+function drawSpotRect(ctx, spot, color, lw) {
     const fwdX = -Math.sin(spot.angle), fwdZ = -Math.cos(spot.angle);
-    const rgtX = fwdZ, rgtZ = -fwdX;
-    const corners = [
-        [spot.x + fwdX * hd + rgtX * hw, spot.z + fwdZ * hd + rgtZ * hw],
-        [spot.x + fwdX * hd - rgtX * hw, spot.z + fwdZ * hd - rgtZ * hw],
-        [spot.x - fwdX * hd - rgtX * hw, spot.z - fwdZ * hd - rgtZ * hw],
-        [spot.x - fwdX * hd + rgtX * hw, spot.z - fwdZ * hd + rgtZ * hw],
+    const rX = fwdZ, rZ = -fwdX;
+    const hw = SPOT_HW, hd = SPOT_HD;
+    const C = [
+        [spot.x + fwdX*hd + rX*hw, spot.z + fwdZ*hd + rZ*hw],
+        [spot.x + fwdX*hd - rX*hw, spot.z + fwdZ*hd - rZ*hw],
+        [spot.x - fwdX*hd - rX*hw, spot.z - fwdZ*hd - rZ*hw],
+        [spot.x - fwdX*hd + rX*hw, spot.z - fwdZ*hd + rZ*hw],
     ];
-    ctx.strokeStyle = strokeStyle;
-    ctx.lineWidth = lineWidth;
+    ctx.strokeStyle = color;
+    ctx.lineWidth   = lw;
     ctx.beginPath();
-    ctx.moveTo(cx(corners[0][0]), cy(corners[0][1]));
-    for (let i = 1; i < 4; i++) ctx.lineTo(cx(corners[i][0]), cy(corners[i][1]));
+    ctx.moveTo(cx(C[0][0]), cy(C[0][1]));
+    for (let i = 1; i < 4; i++) ctx.lineTo(cx(C[i][0]), cy(C[i][1]));
     ctx.closePath();
     ctx.stroke();
 }
 
-// Crée une texture canvas avec tous les marquages au sol
-function buildAsphaltTexture() {
+// ── Flèche directionnelle ─────────────────────────────────────────────────────
+function drawArrow(ctx, wx, wz, angleDeg, size = 18) {
+    ctx.save();
+    ctx.translate(cx(wx), cy(wz));
+    ctx.rotate(angleDeg * Math.PI / 180);
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.beginPath();
+    ctx.moveTo(0, -size);
+    ctx.lineTo(size * 0.55, size * 0.45);
+    ctx.lineTo(0, 0);
+    ctx.lineTo(-size * 0.55, size * 0.45);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+}
+
+// ── Tirets de l'axe médian ────────────────────────────────────────────────────
+function drawDashes(ctx, x1, z1, x2, z2, dashLen = 4, gap = 3) {
+    const dx = x2 - x1, dz = z2 - z1;
+    const len = Math.hypot(dx, dz);
+    const nx = dx / len, nz = dz / len;
+    const total = dashLen + gap;
+    ctx.strokeStyle = 'rgba(255,255,100,0.5)';
+    ctx.lineWidth = 2;
+    for (let d = 0; d < len; d += total) {
+        const t0 = d / len, t1 = Math.min((d + dashLen) / len, 1);
+        ctx.beginPath();
+        ctx.moveTo(cx(x1 + dx * t0), cy(z1 + dz * t0));
+        ctx.lineTo(cx(x1 + dx * t1), cy(z1 + dz * t1));
+        ctx.stroke();
+    }
+}
+
+// ── Texture canvas principale ─────────────────────────────────────────────────
+function buildTexture() {
     const canvas = document.createElement('canvas');
-    canvas.width = TEX_W;
-    canvas.height = TEX_H;
+    canvas.width = TW; canvas.height = TH;
     const ctx = canvas.getContext('2d');
 
-    // 1. Asphalte de base
-    ctx.fillStyle = '#3c3c3c';
-    ctx.fillRect(0, 0, TEX_W, TEX_H);
+    // 1. Asphalte de base (route périphérique + zone intérieure)
+    ctx.fillStyle = '#3a3a3a';
+    ctx.fillRect(0, 0, TW, TH);
 
-    // 2. Bande de départ (Z=28 à 34) — plus sombre
-    ctx.fillStyle = '#2a2a2a';
-    ctx.fillRect(cx(-22), cy(34), cx(22) - cx(-22), cy(28) - cy(34));
+    // 2. Zone intérieure de parking (légèrement plus claire)
+    ctx.fillStyle = '#464646';
+    ctx.fillRect(cx(-30), cy(11), cx(30) - cx(-30), cy(-11) - cy(11));
 
-    // 3. Allée A (Z=7 à 19) — légèrement plus clair
-    ctx.fillStyle = '#404040';
-    ctx.fillRect(cx(-22), cy(19), cx(22) - cx(-22), cy(7) - cy(19));
+    // 3. Trottoirs (bandes claires entre zone intérieure et route)
+    ctx.fillStyle = '#8a8a8a';
+    // Haut
+    ctx.fillRect(cx(-30), cy(12), cx(30) - cx(-30), cy(11) - cy(12));
+    // Bas
+    ctx.fillRect(cx(-30), cy(-11), cx(30) - cx(-30), cy(-12) - cy(-11));
 
-    // 4. Séparateur herbe (Z=-1 à 1) — vert
+    // 4. Herbe extérieure (au-delà de X=±37, Z=±18) — remplie en vert
     ctx.fillStyle = '#4a7c3a';
-    ctx.fillRect(cx(-22), cy(1), cx(22) - cx(-22), cy(-1) - cy(1));
+    // Bords gauche/droit
+    ctx.fillRect(0,        0, cx(-37),             TH);
+    ctx.fillRect(cx(37),   0, TW - cx(37),          TH);
+    // Bords haut/bas
+    ctx.fillRect(cx(-37), 0,         cx(37) - cx(-37), cy(18));
+    ctx.fillRect(cx(-37), cy(-18),   cx(37) - cx(-37), TH - cy(-18));
 
-    // 5. Allée B (Z=-13 à -20) — légèrement plus clair
-    ctx.fillStyle = '#404040';
-    ctx.fillRect(cx(-22), cy(-13), cx(22) - cx(-22), cy(-20) - cy(-13));
+    // 5. Zone de départ F1 (prolongement à droite de la droite du bas)
+    // Asphalte foncé Z=+11 à +18, X=-37 à +37
+    ctx.fillStyle = '#2e2e2e';
+    ctx.fillRect(cx(-37), cy(18), cx(37) - cx(-37), cy(11) - cy(18));
 
-    // 6. Zone terminale (Z=-26 à -30) — plus sombre
-    ctx.fillStyle = '#2a2a2a';
-    ctx.fillRect(cx(-22), cy(-26), cx(22) - cx(-22), cy(-30) - cy(-26));
+    // 6. Tirets axe médian sur chaque tronçon
+    const MID_R = 33.5, MID_L = -33.5, MID_B = 14.5, MID_T = -14.5;
+    // Bas (→ est, z=14.5)
+    drawDashes(ctx, -36, MID_B,  36, MID_B);
+    // Haut (← ouest, z=-14.5)
+    drawDashes(ctx,  36, MID_T, -36, MID_T);
+    // Droite (↑ nord, x=33.5)
+    drawDashes(ctx, MID_R,  17, MID_R, -17);
+    // Gauche (↓ sud, x=-33.5)
+    drawDashes(ctx, MID_L, -17, MID_L,  17);
 
-    // 7. Bandes trottoir (X=[-22,-20] et [20,22])
-    ctx.fillStyle = '#b0a898';
-    ctx.fillRect(cx(-22), 0, cx(-20) - cx(-22), TEX_H);
-    ctx.fillRect(cx(20), 0, cx(22) - cx(20), TEX_H);
+    // 7. Flèches de sens de circulation
+    // Bas → est (angle 90° = pointe droite)
+    for (let x = -24; x <= 24; x += 16) drawArrow(ctx, x, MID_B, 90);
+    // Haut → ouest (angle -90°)
+    for (let x = 24; x >= -24; x -= 16) drawArrow(ctx, x, MID_T, -90);
+    // Droite → nord (angle 0° = pointe haut)
+    for (let z = 12; z >= -12; z -= 8) drawArrow(ctx, MID_R, z, 0);
+    // Gauche → sud (angle 180°)
+    for (let z = -12; z <= 12; z += 8) drawArrow(ctx, MID_L, z, 180);
 
-    // 8. Lignes blanches de toutes les places
-    ctx.save();
-    for (const spot of SPOTS) {
-        drawSpotRect(ctx, spot, 'rgba(220,220,220,0.9)', 3);
+    // 8. Lignes blanches des places (toutes)
+    for (const s of SPOTS) drawSpotRect(ctx, s, 'rgba(210,210,210,0.85)', 3);
+
+    // 9. Contours jaunes des places vides
+    for (const s of SPOTS) {
+        if (!s.empty) continue;
+        drawSpotRect(ctx, s, '#f7c900', 5);
+        // "P" au centre de la place
+        ctx.save();
+        ctx.fillStyle = 'rgba(247,201,0,0.6)';
+        ctx.font = `bold ${Math.round(cy(0)-cy(3))}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('P', cx(s.x), cy(s.z));
+        ctx.restore();
     }
-    ctx.restore();
 
-    // 9. Contours jaunes des places vides (par-dessus les blanches)
-    ctx.save();
-    for (const spot of SPOTS) {
-        if (!spot.empty) continue;
-        drawSpotRect(ctx, spot, '#f7c900', 5);
-    }
-    ctx.restore();
-
-    // 10. Damier de ligne de départ à Z=30
+    // 10. Ligne de départ (damier) à x=-27, traversant la droite du bas
     {
-        const sqW = 4 / WORLD_W * TEX_W; // 4 unités monde → pixels
-        const sqH = sqW;
-        const startY = cy(30);
-        const endY   = cy(28);
-        const numCols = Math.ceil(TEX_W / sqW);
-        for (let col = 0; col < numCols; col++) {
-            // Alterner noir/blanc
-            ctx.fillStyle = col % 2 === 0 ? '#ffffff' : '#000000';
-            ctx.fillRect(col * sqW, Math.min(startY, endY), sqW, Math.abs(endY - startY));
+        const sqH = cy(11) - cy(18); // hauteur en pixels du tronçon
+        const sqW = sqH;             // carré
+        const startX = cx(-27);
+        const numRows = Math.ceil((cy(-11) - cy(-18)) / sqH) + 1;
+        const colZ0   = cy(18);      // haut du tronçon bas
+        for (let row = 0; row < 3; row++) {
+            for (let col = 0; col <= 1; col++) {
+                ctx.fillStyle = (row + col) % 2 === 0 ? '#ffffff' : '#000000';
+                ctx.fillRect(startX + col * sqW, colZ0 + row * sqH, sqW, sqH);
+            }
         }
     }
 
-    // 11. Flèches de couloir
-    ctx.fillStyle = '#666666';
-    // Allée A : Z=13, flèche pointant sud
-    {
-        const ax = cx(0), ay = cy(13);
-        const arrowH = 30, arrowW = 14;
-        ctx.save();
-        ctx.translate(ax, ay);
-        ctx.beginPath();
-        ctx.moveTo(0, arrowH / 2);
-        ctx.lineTo(-arrowW / 2, -arrowH / 2);
-        ctx.lineTo(arrowW / 2, -arrowH / 2);
-        ctx.closePath();
-        ctx.fill();
-        ctx.restore();
-    }
-    // Allée B : Z=-16.5, deux flèches (nord et sud)
-    {
-        const bx = cx(-8), by = cy(-16.5);
-        const arrowH = 28, arrowW = 13;
-        // Flèche nord (pointe vers le haut du canvas = vers Z+)
-        ctx.save();
-        ctx.translate(bx, by);
-        ctx.beginPath();
-        ctx.moveTo(0, -arrowH / 2);
-        ctx.lineTo(-arrowW / 2, arrowH / 2);
-        ctx.lineTo(arrowW / 2, arrowH / 2);
-        ctx.closePath();
-        ctx.fill();
-        ctx.restore();
-        // Flèche sud
-        const bx2 = cx(8);
-        ctx.save();
-        ctx.translate(bx2, by);
-        ctx.beginPath();
-        ctx.moveTo(0, arrowH / 2);
-        ctx.lineTo(-arrowW / 2, -arrowH / 2);
-        ctx.lineTo(arrowW / 2, -arrowH / 2);
-        ctx.closePath();
-        ctx.fill();
-        ctx.restore();
-    }
-
-    // 12. Lignes de bordure du lot (X=±18)
-    ctx.strokeStyle = '#ffffff';
+    // 11. Boxes de grille F1 (rectangles tracés sur la droite du bas)
+    ctx.strokeStyle = 'rgba(255,255,0,0.6)';
     ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(cx(-18), cy(34));
-    ctx.lineTo(cx(-18), cy(-26));
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(cx(18), cy(34));
-    ctx.lineTo(cx(18), cy(-26));
-    ctx.stroke();
+    for (const pos of STARTING_POSITIONS) {
+        ctx.strokeRect(cx(pos.x - 2), cy(pos.z + 2.5), cx(pos.x + 2) - cx(pos.x - 2), cy(pos.z - 2.5) - cy(pos.z + 2.5));
+        // Numéro de position
+        ctx.fillStyle = 'rgba(255,255,0,0.5)';
+        ctx.font = `bold ${Math.round(cy(0) - cy(2))}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+    }
 
-    const tex = new THREE.CanvasTexture(canvas);
-    return tex;
+    // 12. Panneau "PARKING" dans la zone intérieure (décoratif)
+    ctx.fillStyle = 'rgba(70,70,70,0.0)'; // invisible, juste pour la lisibilité du code
+
+    // 13. Lignes de délimitation de la route intérieure
+    ctx.strokeStyle = 'rgba(180,180,180,0.4)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.strokeRect(cx(-30), cy(11), cx(30) - cx(-30), cy(-11) - cy(11));
+    ctx.setLineDash([]);
+
+    return new THREE.CanvasTexture(canvas);
 }
 
+// ── Export principal ──────────────────────────────────────────────────────────
 export function createParkingLot() {
     const meshes = [];
 
-    // ── A. Plan asphalte principal ────────────────────────────────────────────
-    const asphaltTex = buildAsphaltTexture();
-    const asphaltGeo = new THREE.PlaneGeometry(44, 60);
-    const asphaltMat = new THREE.MeshStandardMaterial({
-        map:       asphaltTex,
-        roughness: 0.9,
-        metalness: 0.0,
-    });
-    const asphaltMesh = new THREE.Mesh(asphaltGeo, asphaltMat);
-    asphaltMesh.rotation.x = -Math.PI / 2;
-    asphaltMesh.position.set(0, 0.01, 4); // centré sur X=[-22,22], Z=[-26,34]
-    asphaltMesh.receiveShadow = true;
-    scene.add(asphaltMesh);
-    meshes.push(asphaltMesh);
+    // A. Plan asphalte principal (2048×1024, 80×48 unités monde)
+    const tex = buildTexture();
+    const geo = new THREE.PlaneGeometry(80, 48);
+    const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9, metalness: 0 });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.set(0, 0.01, 2); // centre en Z=(26-22)/2=2
+    mesh.receiveShadow = true;
+    scene.add(mesh);
+    meshes.push(mesh);
 
-    // ── B. Zone de départ (Z=34 à 40) ────────────────────────────────────────
-    const startGeo = new THREE.PlaneGeometry(44, 6);
-    const startMat = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.9, metalness: 0.0 });
-    const startMesh = new THREE.Mesh(startGeo, startMat);
-    startMesh.rotation.x = -Math.PI / 2;
-    startMesh.position.set(0, 0.01, 37);
-    startMesh.receiveShadow = true;
-    scene.add(startMesh);
-    meshes.push(startMesh);
-
-    // ── C. Bordures herbe ─────────────────────────────────────────────────────
-    const grassMat = new THREE.MeshStandardMaterial({ color: 0x4a7c3a, roughness: 1.0, metalness: 0.0 });
-
-    const grassDefs = [
-        // [largeur, profondeur, cx, cz]
-        { w: 4,  d: 70, x: -24, z: 5  },  // gauche  X=[-26,-22]
-        { w: 4,  d: 70, x:  24, z: 5  },  // droite  X=[22,26]
-        { w: 52, d: 5,  x:   0, z: 39.5 }, // nord   Z=[37,42]
-        { w: 52, d: 4,  x:   0, z: -28 }, // sud    Z=[-30,-26]
-    ];
-    for (const g of grassDefs) {
-        const geo = new THREE.PlaneGeometry(g.w, g.d);
-        const m   = new THREE.Mesh(geo, grassMat);
+    // B. Herbe extérieure (4 panneaux verts au-delà de X=±37 et Z=±18)
+    const gMat = new THREE.MeshStandardMaterial({ color: 0x4a7c3a, roughness: 1 });
+    [
+        { w: 12, d: 80, x: -43, z: 2   },   // gauche
+        { w: 12, d: 80, x:  43, z: 2   },   // droite
+        { w: 94, d: 10, x:   0, z: -23 },   // nord
+        { w: 94, d: 10, x:   0, z:  31 },   // sud
+    ].forEach(g => {
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(g.w, g.d), gMat);
         m.rotation.x = -Math.PI / 2;
         m.position.set(g.x, 0, g.z);
         m.receiveShadow = true;
         scene.add(m);
         meshes.push(m);
-    }
+    });
 
-    // ── D. Bordures basses / trottoirs ────────────────────────────────────────
-    const curbMat = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.8, metalness: 0.0 });
-
-    const curbDefs = [
-        // Limite nord (Z=27.5)
-        { w: 44, h: 0.3, d: 0.3, x: 0, y: 0.15, z: 27.5 },
-        // Limite sud (Z=-26)
-        { w: 44, h: 0.3, d: 0.3, x: 0, y: 0.15, z: -26 },
-        // Limite ouest (X=-22)
-        { w: 0.3, h: 0.3, d: 66, x: -22, y: 0.15, z: 4 },
-        // Limite est (X=22)
-        { w: 0.3, h: 0.3, d: 66, x:  22, y: 0.15, z: 4 },
-    ];
-    for (const c of curbDefs) {
-        const geo = new THREE.BoxGeometry(c.w, c.h, c.d);
-        const m   = new THREE.Mesh(geo, curbMat);
+    // C. Bordures basses (trottoirs / îlots)
+    const cMat = new THREE.MeshStandardMaterial({ color: 0x999999, roughness: 0.8 });
+    [
+        // Pourtour extérieur de la route
+        { w: 74, h: 0.3, d: 0.4, x:  0,   y: 0.15, z:  18.2  },
+        { w: 74, h: 0.3, d: 0.4, x:  0,   y: 0.15, z: -18.2  },
+        { w: 0.4,h: 0.3, d: 36,  x:  37.2,y: 0.15, z:  0     },
+        { w: 0.4,h: 0.3, d: 36,  x: -37.2,y: 0.15, z:  0     },
+        // Délimitation intérieure (séparation route / parking)
+        { w: 60, h: 0.2, d: 0.3, x:  0,   y: 0.1,  z:  11.15 },
+        { w: 60, h: 0.2, d: 0.3, x:  0,   y: 0.1,  z: -11.15 },
+        { w: 0.3,h: 0.2, d: 22,  x:  30.15,y: 0.1, z:  0     },
+        { w: 0.3,h: 0.2, d: 22,  x: -30.15,y: 0.1, z:  0     },
+    ].forEach(c => {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(c.w, c.h, c.d), cMat);
         m.position.set(c.x, c.y, c.z);
-        m.castShadow    = true;
-        m.receiveShadow = true;
+        m.castShadow = m.receiveShadow = true;
         scene.add(m);
         meshes.push(m);
-    }
+    });
 
     return {
         dispose() {

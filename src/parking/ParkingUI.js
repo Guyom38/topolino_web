@@ -1,88 +1,101 @@
-// ── Interface utilisateur du mode parking ─────────────────────────────────────
-// Timer (haut centre) + scores par joueur (bas centre) + sprites 3D au-dessus des voitures
-
+// ── Interface du mode parking ─────────────────────────────────────────────────
 import * as THREE from 'three';
-import { camera } from '../scene.js';
 
-let timerEl = null;
-let scoreEl = null;
+let _timerEl  = null;
+let _scoreEl  = null;
+const _wrongWayEls  = new Map(); // playerId → élément DOM
+const _scoreSprites = new Map(); // playerId → Sprite
 
-// ── Init / destroy ─────────────────────────────────────────────────────────────
-
+// ── Init / Hide ───────────────────────────────────────────────────────────────
 export function initParkingUI() {
-    // Minuterie (grand compte à rebours, centré en haut)
-    timerEl = document.createElement('div');
-    timerEl.id = 'parking-timer';
-    timerEl.style.cssText = `
-        position:absolute; top:18px; left:50%; transform:translateX(-50%);
-        font-size:52px; font-weight:900; color:#fff;
-        text-shadow: 0 0 20px rgba(0,0,0,0.8), 2px 2px 0 rgba(0,0,0,0.6);
-        font-family: 'Segoe UI', sans-serif; letter-spacing:4px;
-        pointer-events:none; z-index:100;
-    `;
-    document.body.appendChild(timerEl);
+    // Chrono (grand, centré en haut)
+    _timerEl = document.createElement('div');
+    _timerEl.id = 'parking-timer';
+    Object.assign(_timerEl.style, {
+        position: 'absolute', top: '16px', left: '50%', transform: 'translateX(-50%)',
+        fontSize: '58px', fontWeight: '900', color: '#fff', letterSpacing: '4px',
+        fontFamily: "'Segoe UI', sans-serif",
+        textShadow: '0 0 24px rgba(0,0,0,0.9), 2px 3px 0 rgba(0,0,0,0.6)',
+        pointerEvents: 'none', zIndex: '100',
+    });
+    document.body.appendChild(_timerEl);
 
-    // Panneau de scores (bas centre)
-    scoreEl = document.createElement('div');
-    scoreEl.id = 'parking-score';
-    scoreEl.style.cssText = `
-        position:absolute; bottom:20px; left:50%; transform:translateX(-50%);
-        display:flex; gap:12px; flex-wrap:wrap; justify-content:center;
-        pointer-events:none; z-index:100;
-    `;
-    document.body.appendChild(scoreEl);
+    // Scores (bas, centré)
+    _scoreEl = document.createElement('div');
+    _scoreEl.id = 'parking-score';
+    Object.assign(_scoreEl.style, {
+        position: 'absolute', bottom: '16px', left: '50%', transform: 'translateX(-50%)',
+        display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center',
+        pointerEvents: 'none', zIndex: '100',
+    });
+    document.body.appendChild(_scoreEl);
 }
 
 export function hideParkingUI() {
-    if (timerEl) { timerEl.remove(); timerEl = null; }
-    if (scoreEl) { scoreEl.remove(); scoreEl = null; }
+    _timerEl?.remove();  _timerEl = null;
+    _scoreEl?.remove();  _scoreEl = null;
+    _wrongWayEls.forEach(el => el.remove());
+    _wrongWayEls.clear();
 }
 
-// ── Mises à jour chaque frame ──────────────────────────────────────────────────
-
+// ── Chrono ────────────────────────────────────────────────────────────────────
 export function updateParkingTimer(secondsLeft, phase) {
-    if (!timerEl) return;
-    const s = Math.ceil(secondsLeft);
-    timerEl.textContent =
-        phase === 'racing' ? `${s}s` :
-        phase === 'go'     ? 'GO !'  :
-        phase === 'ready'  ? 'PRÊTS ?' :
-        '⏱ ' + s + 's';
-    timerEl.style.color = (s <= 10 && phase === 'racing') ? '#ff4444' : '#ffffff';
+    if (!_timerEl) return;
+    const s = Math.ceil(Math.max(0, secondsLeft));
+    if (phase === 'ended') {
+        _timerEl.textContent = '⏱ Terminé !';
+        _timerEl.style.color = '#ffdd00';
+    } else {
+        _timerEl.textContent = `${String(Math.floor(s / 60)).padStart(2,'0')}:${String(s % 60).padStart(2,'0')}`;
+        _timerEl.style.color = s <= 10 ? '#ff4444' : '#ffffff';
+    }
 }
 
+// ── Scores ────────────────────────────────────────────────────────────────────
 export function updateParkingScores(players, scores) {
-    if (!scoreEl) return;
+    if (!_scoreEl) return;
     let html = '';
     for (const [id, p] of players) {
         if (!p.car) continue;
-        const sc       = scores.get(id);
-        const pts      = sc ? sc.total : '—';
-        const spotType = sc && sc.spot
-            ? (sc.spot.type === 'creneau' ? '↕ Créneau' : '↗ Bataille')
-            : '—';
+        const sc = scores.get(id);
+        const pts      = sc?.total ?? '—';
+        const spotType = sc?.spot ? (sc.spot.type === 'creneau' ? '↕ Créneau' : '↗ Bataille') : '—';
         html += `
-            <div style="background:rgba(0,0,0,0.6);border-left:4px solid ${_esc(p.colorHex ?? '#ffffff')};
-                border-radius:8px;padding:8px 14px;color:#fff;font-family:sans-serif;min-width:120px;backdrop-filter:blur(6px)">
-                <div style="font-size:11px;opacity:0.7">${_esc(p.name ?? 'Joueur')}</div>
-                <div style="font-size:26px;font-weight:900">${pts}</div>
-                <div style="font-size:10px;opacity:0.6">${spotType}</div>
-            </div>`;
+        <div style="background:rgba(0,0,0,0.6);border-left:4px solid ${p.colorHex};
+            border-radius:8px;padding:8px 14px;color:#fff;font-family:sans-serif;
+            min-width:110px;text-align:center;backdrop-filter:blur(6px)">
+            <div style="font-size:11px;opacity:0.7">${_esc(p.name)}</div>
+            <div style="font-size:28px;font-weight:900">${pts}</div>
+            <div style="font-size:10px;opacity:0.6">${spotType}</div>
+        </div>`;
     }
-    scoreEl.innerHTML = html;
+    _scoreEl.innerHTML = html;
 }
 
-function _esc(s) {
-    return String(s)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
+// ── Avertissement contresens ──────────────────────────────────────────────────
+export function showWrongWay(playerId) {
+    if (_wrongWayEls.has(playerId)) return;
+    const el = document.createElement('div');
+    Object.assign(el.style, {
+        position: 'absolute', top: '90px', left: '50%', transform: 'translateX(-50%)',
+        fontSize: '32px', fontWeight: '900', color: '#ff2222', letterSpacing: '2px',
+        fontFamily: "'Segoe UI', sans-serif",
+        background: 'rgba(0,0,0,0.55)', borderRadius: '10px', padding: '6px 22px',
+        textShadow: '0 0 12px rgba(255,0,0,0.8)',
+        pointerEvents: 'none', zIndex: '200',
+        animation: 'parkingBlink 0.5s step-end infinite',
+    });
+    el.textContent = '⚠ CONTRESENS !';
+    document.body.appendChild(el);
+    _wrongWayEls.set(playerId, el);
 }
 
-// ── Sprites 3D (score flottant au-dessus des voitures) ────────────────────────
+export function hideWrongWay(playerId) {
+    const el = _wrongWayEls.get(playerId);
+    if (el) { el.remove(); _wrongWayEls.delete(playerId); }
+}
 
-const _scoreSprites = new Map(); // playerId → sprite
-
+// ── Sprites 3D score (flottent au-dessus de chaque voiture) ──────────────────
 export function updateScoreSprites(players, scores, scene) {
     for (const [id, p] of players) {
         if (!p.car) continue;
@@ -91,51 +104,44 @@ export function updateScoreSprites(players, scores, scene) {
 
         let spr = _scoreSprites.get(id);
         if (!spr) {
-            const canvas = document.createElement('canvas');
-            canvas.width  = 192;
-            canvas.height = 64;
-            const tex = new THREE.CanvasTexture(canvas);
+            const cv = document.createElement('canvas');
+            cv.width = 192; cv.height = 64;
+            const tex = new THREE.CanvasTexture(cv);
             const mat = new THREE.SpriteMaterial({ map: tex, depthWrite: false, depthTest: false });
-            spr              = new THREE.Sprite(mat);
-            spr.scale.set(5, 1.7, 1);
-            spr.renderOrder  = 998;
-            spr._canvas      = canvas;
+            spr = new THREE.Sprite(mat);
+            spr.scale.set(5.5, 1.8, 1);
+            spr.renderOrder = 998;
+            spr._canvas = cv;
             scene.add(spr);
             _scoreSprites.set(id, spr);
         }
 
-        // Redessiner le canvas du sprite
         const ctx = spr._canvas.getContext('2d');
         ctx.clearRect(0, 0, 192, 64);
-        ctx.font          = 'bold 38px Arial';
-        ctx.textAlign     = 'center';
-        ctx.textBaseline  = 'middle';
-        ctx.strokeStyle   = 'rgba(0,0,0,0.9)';
-        ctx.lineWidth     = 6;
+        ctx.font = 'bold 38px Arial';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.strokeStyle = 'rgba(0,0,0,0.9)'; ctx.lineWidth = 6;
         ctx.strokeText(sc.total + ' pts', 96, 32);
-        ctx.fillStyle     = '#ffdd00';
+        ctx.fillStyle = '#ffdd00';
         ctx.fillText(sc.total + ' pts', 96, 32);
         spr.material.map.needsUpdate = true;
-
-        // Positionner au-dessus de la voiture
-        spr.position.set(
-            p.car.position.x,
-            p.car.position.y + 5.5,
-            p.car.position.z,
-        );
-    }
-}
-
-function _hideSprite(id, scene) {
-    const spr = _scoreSprites.get(id);
-    if (spr) {
-        scene.remove(spr);
-        spr.material.map.dispose();
-        spr.material.dispose();
-        _scoreSprites.delete(id);
+        spr.position.set(p.car.position.x, p.car.position.y + 5.5, p.car.position.z);
     }
 }
 
 export function disposeScoreSprites(scene) {
     for (const [id] of _scoreSprites) _hideSprite(id, scene);
+}
+
+function _hideSprite(id, scene) {
+    const spr = _scoreSprites.get(id);
+    if (!spr) return;
+    scene.remove(spr);
+    spr.material.map.dispose();
+    spr.material.dispose();
+    _scoreSprites.delete(id);
+}
+
+function _esc(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }

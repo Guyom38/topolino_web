@@ -57,9 +57,10 @@ export function scorePlayer(player) {
         }
     }
 
-    // Pénalité de dégâts (25 pts par collision)
-    const dmgPenalty = (player.hitCount ?? 0) * 25;
-    if (best) best.total = Math.max(0, best.total - dmgPenalty);
+    // Pénalités
+    const dmgPenalty      = (player.hitCount       ?? 0) * 25;  // 25 pts / collision
+    const wrongWayPenalty = (player._wrongWayPenalty ?? 0) * 15; // 15 pts / seconde de contresens
+    if (best) best.total = Math.max(0, best.total - dmgPenalty - wrongWayPenalty);
 
     return best || { spot: null, positionScore: 0, angleScore: 0, total: 0 };
 }

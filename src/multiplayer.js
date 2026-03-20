@@ -34,7 +34,7 @@ function _connectToServer() {
     const tryConnect = () => {
         if (typeof io === 'undefined') { setTimeout(tryConnect, 100); return; }
 
-        const sock = io(window.location.origin, { transports: ['websocket'] });
+        const sock = io(window.location.origin);
 
         sock.on('connect', () => {
             sock.emit('register_display');

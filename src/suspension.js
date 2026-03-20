@@ -15,7 +15,7 @@ const CORNERS = [
     { fwd: -HALF_WB, side:  HALF_TW },   // AR-D
 ];
 
-export function updateSuspension(p) {
+export function updateSuspension(p, getY = getHeightAt) {
     const { car, carAngle, onGround } = p;
     const sa = Math.sin(carAngle), ca = Math.cos(carAngle);
 
@@ -23,7 +23,7 @@ export function updateSuspension(p) {
     const wh = CORNERS.map(c => {
         const wx = car.position.x + (-sa) * c.fwd + ca * c.side;
         const wz = car.position.z + (-ca) * c.fwd + (-sa) * c.side;
-        return getHeightAt(wx, wz);
+        return getY(wx, wz);
     });
 
     // Initialisation à chaud (par joueur, pas module-level)

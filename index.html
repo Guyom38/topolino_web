@@ -6,6 +6,7 @@
     <title>Topolino Car Game</title>
     <style>
         body { margin: 0; overflow: hidden; background: #87CEEB; font-family: 'Segoe UI', sans-serif; }
+        @keyframes parkingBlink { 0%,100%{opacity:1} 50%{opacity:0.15} }
         canvas { display: block; }
 
         /* ── Scoreboard (haut-gauche) ── */
@@ -46,9 +47,29 @@
             padding: 6px 10px; border-radius: 6px;
             pointer-events: none;
         }
+
+        /* ── Sélecteur de mode ── */
+        #mode-switcher {
+            position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 8px;
+            pointer-events: auto;
+        }
+        .mode-btn {
+            background: rgba(0,0,0,0.5); color: #fff; border: none;
+            border-radius: 20px; padding: 6px 16px; font-size: 13px; font-weight: 600;
+            cursor: pointer; backdrop-filter: blur(4px); transition: background 0.2s;
+        }
+        .mode-btn:hover { background: rgba(255,255,255,0.2); }
+        .mode-btn.active { background: rgba(255,200,0,0.7); color: #000; }
     </style>
 </head>
 <body>
+
+    <!-- Sélecteur de mode -->
+    <div id="mode-switcher">
+        <button class="mode-btn" onclick="window.location.href='?mode=drive'" id="btn-drive">🏔 Conduite libre</button>
+        <button class="mode-btn" onclick="window.location.href='?mode=parking'" id="btn-parking">🅿 Parking</button>
+    </div>
 
     <!-- Scoreboard -->
     <div id="scoreboard"></div>
@@ -78,6 +99,11 @@
             "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
         }
     }
+    </script>
+
+    <script>
+        const mode = new URLSearchParams(location.search).get('mode') ?? 'drive';
+        document.getElementById('btn-' + mode)?.classList.add('active');
     </script>
 
     <script type="module" src="src/main.js"></script>

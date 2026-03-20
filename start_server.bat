@@ -1,33 +1,27 @@
 @echo off
 setlocal
 
-echo.
-echo  Topolino — Demarrage du serveur
-echo  ================================
-echo.
+echo --- Topolino Game Server Starter (Node.js) ---
 
-:: Venv présent → on l'utilise directement
-if exist .venv\Scripts\activate.bat (
-    call .venv\Scripts\activate.bat
-    echo  [OK] Venv active.
-    echo  Lancement de server.py...
-    echo.
-    python server.py
+:: Vérifier si Node.js est installé
+where node >nul 2>&1
+if %ERRORLEVEL% EQU 0 (
+    echo [OK] Node.js detecte. Lancement du serveur...
+    
+    :: Installer les dépendances si nécessaire (Express, Body-Parser)
+    if not exist "node_modules" (
+        echo [INFO] Installation des dependances...
+        npm install express body-parser
+    )
+    
+    start http://localhost:5000
+    node server.js
     goto end
 )
 
-:: Pas de venv → propose de lancer setup.bat
-echo  [!] Environnement virtuel introuvable.
-echo  Lancez d'abord setup.bat pour installer les dependances.
-echo.
-set /p RUN_SETUP="Lancer setup.bat maintenant ? (O/N) : "
-if /i "%RUN_SETUP%"=="O" (
-    call setup.bat
-    if exist .venv\Scripts\activate.bat (
-        call .venv\Scripts\activate.bat
-        python server.py
-    )
-)
+echo [ERREUR] Node.js est requis pour faire fonctionner le système d'upload et la manette mobile.
+echo Veuillez l'installer sur https://nodejs.org/
+pause
 
 :end
 endlocal

@@ -41,6 +41,13 @@ export function getCameraDebug() {
     };
 }
 
+// ── Mode parking : vue paysage TV (lot 80×44 unités, 16:9) ───────────────────
+export function setParkingCamera() {
+    PHI    = 0.38;  // ~22° depuis le zénith — vue large
+    THETA  = 0;     // caméra au sud (+Z), regarde vers le nord (-Z)
+    RADIUS = 80;    // recul suffisant pour FOV 75° sur 80 unités de large
+}
+
 /**
  * Mise à jour chaque frame.
  * @param {Map} players — Map<id, PlayerCar>
