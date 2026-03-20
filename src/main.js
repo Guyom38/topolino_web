@@ -16,6 +16,7 @@ async function startDriveMode() {
 
     function animate() {
         requestAnimationFrame(animate);
+        const now = performance.now();
 
         for (const p of players.values()) {
             if (!p.car) continue;
@@ -29,6 +30,7 @@ async function startDriveMode() {
             const terrainY = getHeightAt(p.car.position.x, p.car.position.z);
             if (p.shadow) p.shadow.update(p.car.position, p.carAngle, terrainY);
             if (p.tracks) p.tracks.update(p);
+            if (p.aura)   p.aura.update(p.car.position, now);
             p.updateNameLabel();
         }
 
@@ -80,6 +82,7 @@ async function startParkingMode() {
             if (!p.car) continue;
             if (p.shadow) p.shadow.update(p.car.position, p.carAngle, 0);
             if (p.tracks) p.tracks.update(p);
+            if (p.aura)   p.aura.update(p.car.position, now);
             p.updateNameLabel();
         }
 
@@ -100,6 +103,7 @@ async function startChaseMode() {
 
     function animate() {
         requestAnimationFrame(animate);
+        const now = performance.now();
 
         for (const p of players.values()) {
             if (!p.car) continue;
@@ -113,6 +117,7 @@ async function startChaseMode() {
             const terrainY = getHeightAt(p.car.position.x, p.car.position.z);
             if (p.shadow) p.shadow.update(p.car.position, p.carAngle, terrainY);
             if (p.tracks) p.tracks.update(p);
+            if (p.aura)   p.aura.update(p.car.position, now);
             p.updateNameLabel();
             // Afficher le score de possession (secondes, 1 décimale)
             setPlayerScore(p.id, Math.floor(p.getLuggageScore()) + 's');
@@ -232,6 +237,7 @@ async function startBattleMode() {
             const terrainY = getHeightAt(p.car.position.x, p.car.position.z);
             if (p.shadow) p.shadow.update(p.car.position, p.carAngle, terrainY);
             if (p.tracks) p.tracks.update(p);
+            if (p.aura)   p.aura.update(p.car.position, now);
             p.updateNameLabel();
         }
 

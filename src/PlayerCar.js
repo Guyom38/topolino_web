@@ -40,9 +40,10 @@ export class PlayerCar {
         this._nameSprite = null;
         this._nameCanvas = null;
 
-        // ── Systèmes traces / ombre (injectés après chargement) ───────────────
+        // ── Systèmes traces / ombre / aura (injectés après chargement) ───────
         this.tracks = null;
         this.shadow = null;
+        this.aura   = null;
 
         // ── Mode voleur de bagage ─────────────────────────────────────────────
         this.hasLuggage        = false;
@@ -64,6 +65,13 @@ export class PlayerCar {
         }
         this.hasLuggage = hasIt;
         this.luggageMeshes.forEach(m => { m.visible = hasIt; });
+
+        // Aura UNIQUEMENT en mode poursuite (chase)
+        const isChaseMode = new URLSearchParams(window.location.search).get('mode') === 'chase';
+        if (this.aura) {
+            this.aura.setVisible(hasIt && isChaseMode);
+        }
+
         if (hasIt) {
             this._luggageGotTime = performance.now();
             this.invincibleUntil = performance.now() + HIT_COOLDOWN * 2;
@@ -179,5 +187,6 @@ export class PlayerCar {
         }
         if (this.shadow) this.shadow.dispose();
         if (this.tracks) this.tracks.dispose();
+        if (this.aura)   this.aura.dispose();
     }
 }

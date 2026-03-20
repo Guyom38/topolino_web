@@ -2,6 +2,7 @@ import { PlayerCar } from './PlayerCar.js';
 import { loadCarForPlayer } from './car.js';
 import { createTrackSystem } from './tracks.js';
 import { createShadow } from './shadow.js';
+import { createAura } from './aura.js';
 import { localKeys } from './input.js';
 
 export const players = new Map();   // playerId → PlayerCar
@@ -22,6 +23,7 @@ export async function initMultiplayer() {
     await loadCarForPlayer(localPlayer);
     localPlayer.tracks = createTrackSystem();
     localPlayer.shadow = createShadow();
+    localPlayer.aura   = createAura();
     // Le premier joueur (local) commence avec le bagage
     localPlayer.setLuggage(true);
     // Pas de label de nom pour le joueur local (caméra le suit)
@@ -100,6 +102,7 @@ async function _addRemote(id, name, color) {
     p.setLuggage(false); // Cacher le bagage par défaut
     p.tracks = createTrackSystem();
     p.shadow = createShadow();
+    p.aura   = createAura();
     p.createNameLabel();
 }
 
