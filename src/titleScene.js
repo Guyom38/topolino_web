@@ -16,20 +16,42 @@ const BODY_COLORS = [
 const DEBUG_OBB = false;
 
 // ── Paramètres scène ──────────────────────────────────────────────────────────
-const CAR_COUNT  = 60;
-const ARENA_R    = 30;
-const SPAWN_R    = 28;
+const CAR_COUNT    = 22;
+const CARS_TOP     = 7;    // voitures sur la route du haut
+const CARS_BOT     = 15;   // voitures sur la route du bas
+
+// ── Routes ────────────────────────────────────────────────────────────────────
+const ROAD_TOP_Z    = -9;    // Z centre route du haut
+const ROAD_BOT_Z    = 5.5;   // Z centre route du bas
+const LANE_OFFSET   = 2.2;   // décalage voie depuis le centre de la route
+const ROAD_HALF_LEN = 70;    // wrap-around X
 
 // ── Physique OBB ──────────────────────────────────────────────────────────────
 const CAR_HL      = 1.90;   // demi-longueur (axe avant/arrière)
 const CAR_HW      = 0.88;   // demi-largeur
-const DRAG        = 0.980;  // frottement sol (décélération passive)
-const THRUST      = 0.0030; // poussée vers la vitesse cible chaque frame
+const DRAG        = 0.985;  // frottement sol (décélération passive)
+const THRUST      = 0.0045; // poussée vers la vitesse cible chaque frame
 const STEER_RATE  = 0.07;   // vitesse de braquage après collision (0=rigide, 1=instant)
 const RESTITUTION = 0.06;   // rebond normal (quasi-nul → glissement pur)
 const FRICTION    = 0.28;   // frottement tangentiel lors du contact
-const MIN_SPEED   = 0.018;
-const MAX_SPEED   = 0.110;
+const MIN_SPEED   = 0.035;
+const MAX_SPEED   = 0.18;
+const POLICE_SPEED_MULT = 1.6; // police roule 1.6× plus vite
+
+// ── Parking route du bas ─────────────────────────────────────────────────────
+// Y2 = voie intérieure (côté terre-plein) → places de parking
+// Y3 = voie extérieure → circulation lente ←
+const BOT_LANE = 1.54;                        // voies 30% plus étroites
+const BOT_Y2 = ROAD_BOT_Z - BOT_LANE;        // parking (côté herbe)
+const BOT_Y3 = ROAD_BOT_Z + BOT_LANE;        // circulation
+const PARK_SPOTS = [
+    { x: -22, z: BOT_Y2 },
+    { x:   2, z: BOT_Y2 },
+    { x:  26, z: BOT_Y2 },
+];
+const PARK_DURATION = 10000; // 10 secondes de pause
+const PARK_APPROACH = 15;    // distance pour repérer une place
+const PARK_SNAP     = 1.5;   // distance de snap pour se garer
 
 let _scene    = null;
 let _camera   = null;
@@ -128,12 +150,16 @@ function _resolveOBB(a, b) {
     }
 }
 
-/** Résout toutes les paires O(n²) – 60 voitures = 1770 tests, très léger */
+/** Résout toutes les paires O(n²) – 22 voitures = 231 tests, très léger */
 function _resolveAll() {
     const n = _cars.length;
     for (let i = 0; i < n; i++)
-        for (let j = i + 1; j < n; j++)
+        for (let j = i + 1; j < n; j++) {
+            // Ignorer les collisions avec les voitures garées ou en train de se ranger
+            const pi = _cars[i].parkState, pj = _cars[j].parkState;
+            if (pi === 'parked' || pi === 'entering' || pj === 'parked' || pj === 'entering') continue;
             _resolveOBB(_cars[i], _cars[j]);
+        }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -186,21 +212,41 @@ function _getPlayerEntry(c) {
     return null;
 }
 
-function _respawn(c, initial) {
-    const ea = Math.random() * Math.PI * 2;
-    const r  = initial ? Math.random() * SPAWN_R : SPAWN_R;
-    c.x = Math.cos(ea) * r;
-    c.z = Math.sin(ea) * r;
-    c.root.position.x = c.x;
-    c.root.position.z = c.z;
+/** Place une voiture IA sur sa route avec un espacement régulier */
+function _spawnOnRoad(c, index, total) {
+    const spread = ROAD_HALF_LEN * 1.8;
+    c.x = -ROAD_HALF_LEN + (index / total) * spread + (Math.random() - 0.5) * 3;
+    c.baseSpeed  = MIN_SPEED + Math.random() * (MAX_SPEED - MIN_SPEED);
+    if (c.isPolice && c.road === 0) c.baseSpeed *= POLICE_SPEED_MULT;
 
-    // Pointer vers le centre ± 40°
-    const toward = Math.atan2(-c.z, -c.x) + (Math.random() - 0.5) * 1.4;
-    c.angle            = toward;
-    c.root.rotation.y  = toward;
-    c.baseSpeed        = MIN_SPEED + Math.random() * (MAX_SPEED - MIN_SPEED);
-    c.vx = Math.cos(toward) * c.baseSpeed;
-    c.vz = -Math.sin(toward) * c.baseSpeed;
+    // Police voie rapide en haut seulement, tout le monde sur mainZ en bas
+    c.targetZ    = (c.isPolice && c.road === 0) ? c.overtakeZ : c.mainZ;
+    c.z          = c.targetZ + (Math.random() - 0.5) * 0.5;
+    c.overtaking = false;
+    c.angle      = c.dir > 0 ? 0 : Math.PI;
+    c.vx         = c.dir * c.baseSpeed;
+    c.vz         = 0;
+    c.root.position.set(c.x, 0, c.z);
+    c.root.rotation.y = c.angle;
+}
+
+/** Bascule une voiture d'une route à l'autre (boucle haut→bas / bas→haut) */
+function _switchRoad(c, newRoad) {
+    c.road      = newRoad;
+    c.dir       = newRoad === 0 ? 1 : -1;
+    c.mainZ     = newRoad === 0 ? ROAD_TOP_Z + LANE_OFFSET : BOT_Y3;
+    c.overtakeZ = newRoad === 0 ? ROAD_TOP_Z - LANE_OFFSET : BOT_Y2;
+    // Police sur voie rapide en haut seulement, tout le monde sur Y3 en bas
+    c.targetZ    = (c.isPolice && newRoad === 0) ? c.overtakeZ : c.mainZ;
+    c.overtaking = false;
+    // Reset parking
+    c.parkState = null;
+    c.parkSpot  = null;
+    c.x     = c.dir > 0 ? -ROAD_HALF_LEN : ROAD_HALF_LEN;
+    c.z     = c.targetZ;
+    c.angle = c.dir > 0 ? 0 : Math.PI;
+    c.vx    = c.dir * Math.abs(c.vx);
+    c.vz    = 0;
 }
 
 function _buildCar(fbxTemplate, color, isPolice = false) {
@@ -263,6 +309,210 @@ function _addDebugOBB(root, color) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+//  Routes à double sens (texture procédurale)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+let _roadMeshes = [];
+let _grassMesh  = null;
+
+// ── Herbe procédurale ─────────────────────────────────────────────────────────
+
+function _createGrassTexture() {
+    const S = 512;
+    const cv = document.createElement('canvas');
+    cv.width = S; cv.height = S;
+    const ctx = cv.getContext('2d');
+
+    // Base terrain vert foncé avec bruit multi-octaves
+    const img = ctx.createImageData(S, S);
+    for (let py = 0; py < S; py++) {
+        for (let px = 0; px < S; px++) {
+            const i = (py * S + px) * 4;
+            const n1 = _smoothNoise(px, py, 6)  * 0.15;
+            const n2 = _smoothNoise(px, py, 20) * 0.08;
+            const n3 = _smoothNoise(px, py, 50) * 0.05;
+            const v  = n1 + n2 + n3;
+            img.data[i]     = 20 + v * 35;   // R
+            img.data[i + 1] = 48 + v * 65;   // G
+            img.data[i + 2] = 10 + v * 22;   // B
+            img.data[i + 3] = 255;
+        }
+    }
+    ctx.putImageData(img, 0, 0);
+
+    // Brins d'herbe (traits fins)
+    for (let i = 0; i < 2000; i++) {
+        const x    = Math.random() * S;
+        const y    = Math.random() * S;
+        const h    = 3 + Math.random() * 7;
+        const lean = (Math.random() - 0.5) * 4;
+        const shade = 30 + Math.random() * 60;
+        ctx.strokeStyle = `rgba(${Math.floor(shade * 0.4)},${Math.floor(shade)},${Math.floor(shade * 0.25)},0.55)`;
+        ctx.lineWidth   = 0.6 + Math.random() * 0.6;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + lean, y - h);
+        ctx.stroke();
+    }
+
+    return cv;
+}
+
+function _createGrass() {
+    const cv  = _createGrassTexture();
+    const tex = new THREE.CanvasTexture(cv);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(30, 30);
+
+    const geo = new THREE.PlaneGeometry(250, 250);
+    const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.95, metalness: 0.0 });
+    _grassMesh = new THREE.Mesh(geo, mat);
+    _grassMesh.rotation.x = -Math.PI / 2;
+    _grassMesh.position.y = -0.04;
+    _scene.add(_grassMesh);
+}
+
+/** Bruit lissé 2D pour texture asphalte / trottoir */
+function _hash(x, y) {
+    const n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
+    return n - Math.floor(n);
+}
+function _smoothNoise(px, py, scale) {
+    const sx = px / scale, sy = py / scale;
+    const ix = Math.floor(sx), iy = Math.floor(sy);
+    const fx = sx - ix, fy = sy - iy;
+    const ux = fx * fx * (3 - 2 * fx);
+    const uy = fy * fy * (3 - 2 * fy);
+    const a = _hash(ix, iy),     b = _hash(ix + 1, iy);
+    const c = _hash(ix, iy + 1), d = _hash(ix + 1, iy + 1);
+    return a + (b - a) * ux + (c - a) * uy + (a - b - c + d) * ux * uy;
+}
+
+function _createRoadTexture(seed, withParking = false) {
+    const W = 2048, H = 512;
+    const cv = document.createElement('canvas');
+    cv.width = W; cv.height = H;
+    const ctx = cv.getContext('2d');
+
+    const SIDEWALK = Math.floor(H * 0.14); // trottoir chaque côté
+    const CURB     = 6;                     // bordure
+
+    // ── Pixels : asphalte + trottoir avec bruit ───────────────────────────
+    const img = ctx.createImageData(W, H);
+    for (let py = 0; py < H; py++) {
+        for (let px = 0; px < W; px++) {
+            const i = (py * W + px) * 4;
+            const sx = px + seed * 500; // décaler le bruit par route
+            let r, g, b;
+
+            if (py < SIDEWALK || py >= H - SIDEWALK) {
+                // Trottoir — gris clair chaud
+                const n = _smoothNoise(sx, py, 10) * 0.12
+                        + _smoothNoise(sx, py, 28) * 0.06;
+                const base = 135 + n * 55;
+                r = base + 8; g = base + 2; b = base - 6;
+
+                // Dalles de trottoir (grille subtile)
+                const tileX = px % 64, tileY = (py < SIDEWALK ? py : py - (H - SIDEWALK)) % 40;
+                if (tileX < 1 || tileY < 1) { r -= 18; g -= 18; b -= 16; }
+            } else {
+                // Asphalte — gris foncé granuleux
+                const n1 = _smoothNoise(sx, py, 5)  * 0.14;
+                const n2 = _smoothNoise(sx, py, 16) * 0.09;
+                const n3 = _smoothNoise(sx, py, 40) * 0.04;
+                const base = 38 + (n1 + n2 + n3) * 90;
+                r = base; g = base; b = base + 3;
+            }
+
+            img.data[i]     = Math.max(0, Math.min(255, r));
+            img.data[i + 1] = Math.max(0, Math.min(255, g));
+            img.data[i + 2] = Math.max(0, Math.min(255, b));
+            img.data[i + 3] = 255;
+        }
+    }
+    ctx.putImageData(img, 0, 0);
+
+    // ── Bordures trottoir (rebord sombre) ─────────────────────────────────
+    ctx.fillStyle = 'rgba(90,88,82,0.85)';
+    ctx.fillRect(0, SIDEWALK - CURB, W, CURB);
+    ctx.fillRect(0, H - SIDEWALK, W, CURB);
+
+    // ── Lignes blanches de rive ───────────────────────────────────────────
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.fillRect(0, SIDEWALK + 1, W, 4);
+    ctx.fillRect(0, H - SIDEWALK - 5, W, 4);
+
+    // ── Ligne centrale ────────────────────────────────────────────────────
+    const centerY = Math.floor(H / 2) - 2;
+    if (withParking) {
+        // ═══ Route du bas : Y2 (parking) en haut, Y3 (circulation) en bas ═══
+        // La texture est mappée : haut = côté terre-plein (Z petit), bas = extérieur (Z grand)
+        // Ligne continue séparant Y2 et Y3
+        ctx.fillStyle = 'rgba(255,255,255,0.85)';
+        ctx.fillRect(0, centerY, W, 4);
+
+        // ── Marquages places de parking côté Y2 (moitié haute, places en LARGEUR) ──
+        const ROAD_LEN = 140;
+        const parkTop  = SIDEWALK + 6;          // bord haut de la zone parking
+        const parkBot  = centerY - 6;           // bord bas (avant ligne centrale)
+        const spotLen  = 110;                   // longueur d'une place (×2)
+        ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+        ctx.lineWidth   = 3;
+        for (const sp of PARK_SPOTS) {
+            const px = Math.round((sp.x + ROAD_LEN / 2) / ROAD_LEN * W);
+            // Rectangle complet de la baie
+            ctx.strokeRect(px - spotLen / 2, parkTop, spotLen, parkBot - parkTop);
+            // Lettre P tournée 90° vers la gauche
+            ctx.save();
+            ctx.translate(px, (parkTop + parkBot) / 2);
+            ctx.rotate(-Math.PI / 2);
+            ctx.fillStyle = 'rgba(255,255,255,0.35)';
+            ctx.font = 'bold 28px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('P', 0, 0);
+            ctx.restore();
+        }
+    } else {
+        // ═══ Route du haut : 2 voies, ligne pointillée classique ═════════
+        ctx.fillStyle = '#ffffff';
+        const dash = 55, gap = 35;
+        for (let x = 0; x < W; x += dash + gap) {
+            ctx.fillRect(x, centerY, dash, 4);
+        }
+    }
+
+    return cv;
+}
+
+function _createRoads() {
+    const ROAD_LEN    = 140;
+    const ROAD_W_TOP  = 12;
+    const ROAD_W_BOT  = 8.4;   // 30% plus étroite
+
+    // Route du haut (au-dessus du titre)
+    const geo1 = new THREE.PlaneGeometry(ROAD_LEN, ROAD_W_TOP);
+    const tex1 = new THREE.CanvasTexture(_createRoadTexture(0));
+    const mat1 = new THREE.MeshStandardMaterial({ map: tex1, roughness: 0.92, metalness: 0.05 });
+    const road1 = new THREE.Mesh(geo1, mat1);
+    road1.rotation.x = -Math.PI / 2;
+    road1.position.set(0, -0.02, ROAD_TOP_Z);
+    _scene.add(road1);
+    _roadMeshes.push(road1);
+
+    // Route du bas — plus étroite, avec places de parking
+    const geo2 = new THREE.PlaneGeometry(ROAD_LEN, ROAD_W_BOT);
+    const tex2 = new THREE.CanvasTexture(_createRoadTexture(1, true));
+    const mat2 = new THREE.MeshStandardMaterial({ map: tex2, roughness: 0.92, metalness: 0.05 });
+    const road2 = new THREE.Mesh(geo2, mat2);
+    road2.rotation.x = -Math.PI / 2;
+    road2.position.set(0, -0.02, ROAD_BOT_Z);
+    _scene.add(road2);
+    _roadMeshes.push(road2);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 //  Init / Loop / Dispose
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -288,6 +538,9 @@ export async function initTitleScene() {
     const fill = new THREE.DirectionalLight(0x334488, 0.4);
     fill.position.set(-20, 8, -15); _scene.add(fill);
 
+    _createGrass();
+    _createRoads();
+
     let fbxTemplate;
     try {
         fbxTemplate = await new Promise((res, rej) =>
@@ -309,9 +562,25 @@ export async function initTitleScene() {
         let girophare = null;
         if (isPolice) girophare = _buildGirophare(root);
 
-        const c = { root, x: 0, z: 0, vx: 0, vz: 0, angle: 0, baseSpeed: 0.05, girophare };
+        // Répartition : CARS_TOP en haut, CARS_BOT en bas
+        const road      = i < CARS_TOP ? 0 : 1;
+        const dir       = road === 0 ? 1 : -1;     // haut → droite, bas → gauche
+        const mainZ     = road === 0 ? ROAD_TOP_Z + LANE_OFFSET : BOT_Y3;  // Y3 pour le bas
+        const overtakeZ = road === 0 ? ROAD_TOP_Z - LANE_OFFSET : BOT_Y2; // Y2 (parking) pour le bas
+
+        const c = {
+            root, x: 0, z: 0, vx: 0, vz: 0, angle: 0, baseSpeed: 0.05, girophare,
+            isPolice, road, dir, mainZ, overtakeZ,
+            targetZ: mainZ, overtaking: false, _overtakeX: 0,
+            // Parking (route du bas uniquement)
+            parkState: null,   // null | 'braking' | 'entering' | 'parked' | 'leaving'
+            parkSpot: null,    // index dans PARK_SPOTS
+            parkTimer: 0,      // timestamp de début de parking
+        };
         _cars.push(c);
-        _respawn(c, true);
+        const idx   = road === 0 ? i : i - CARS_TOP;
+        const total = road === 0 ? CARS_TOP : CARS_BOT;
+        _spawnOnRoad(c, idx, total);
     }
 
     // ── Clavier ──────────────────────────────────────────────────────────────
@@ -400,11 +669,178 @@ function _loop() {
             }
             if (pe.keys.down) { c.vx *= 0.86; c.vz *= 0.86; }
         } else {
-            // ── IA : poussée vers la vitesse cible ────────────────────────
-            const sp = Math.hypot(c.vx, c.vz);
-            if (sp < c.baseSpeed) {
-                c.vx += Math.cos(c.angle) * THRUST;
-                c.vz += -Math.sin(c.angle) * THRUST;
+            // ── IA routière ───────────────────────────────────────────────
+            const SAFE_GAP   = CAR_HL * 3;   // marge 1/2 voiture entre véhicules
+            const LOOK_AHEAD = 14;            // distance de détection
+            const BRAKE_DIST = 7;             // début de freinage
+
+            // 1) Accélération vers la vitesse cible
+            if (Math.abs(c.vx) < c.baseSpeed) {
+                c.vx += c.dir * THRUST;
+            }
+
+            // 2) Braquage latéral vers la voie cible
+            const dz = c.targetZ - c.z;
+            c.vz += dz * 0.008;
+            c.vz *= 0.88;
+
+            // 3) Scanner la voiture la plus proche devant (même voie)
+            let closestDist = Infinity;
+            let closestCar  = null;
+            for (const other of _cars) {
+                if (other === c || other.road !== c.road) continue;
+                if (_getPlayerEntry(other)) continue;
+                const ahead = c.dir * (other.x - c.x);
+                if (ahead > 0 && ahead < LOOK_AHEAD && Math.abs(other.z - c.z) < 2.5) {
+                    if (ahead < closestDist) { closestDist = ahead; closestCar = other; }
+                }
+            }
+
+            // 4) Freinage si danger
+            if (closestCar && closestDist < BRAKE_DIST) {
+                const otherSp = Math.abs(closestCar.vx);
+                if (Math.abs(c.vx) > otherSp) {
+                    c.vx *= closestDist < SAFE_GAP ? 0.88 : 0.95;
+                }
+            }
+
+            if (c.isPolice && c.road === 0) {
+                // ── Police sur route du haut : voie rapide ──────────────
+                c.targetZ = c.overtakeZ;
+
+            } else if (c.road === 1) {
+                // ══ Route du bas : Y3 circulation + Y2 parking ══════════
+                // Pas de dépassement sur cette route
+                c.overtaking = false;
+
+                const now = performance.now();
+
+                if (c.parkState === 'braking') {
+                    // ── Phase 1 : freiner sur Y3 (bloque le trafic derrière) ──
+                    c.targetZ = c.mainZ;   // reste sur Y3
+                    c.vx *= 0.93;          // freinage progressif
+                    // Quasi arrêtée → se ranger vers Y2
+                    if (Math.abs(c.vx) < MIN_SPEED * 0.8) {
+                        c.parkState = 'entering';
+                    }
+                } else if (c.parkState === 'entering') {
+                    // ── Phase 2 : se ranger de Y3 vers Y2 ────────────────────
+                    const spot = PARK_SPOTS[c.parkSpot];
+                    c.targetZ = spot.z;    // viser Y2
+                    // Avancer doucement vers la place
+                    const dx  = spot.x - c.x;
+                    const dxA = Math.abs(dx);
+                    if (dxA > PARK_SNAP) {
+                        c.vx = c.dir * MIN_SPEED * 0.4; // rouler doucement
+                    }
+                    // Snap quand assez proche
+                    if (dxA < PARK_SNAP && Math.abs(c.z - spot.z) < PARK_SNAP) {
+                        c.x = spot.x;
+                        c.z = spot.z;
+                        c.vx = 0; c.vz = 0;
+                        c.parkState = 'parked';
+                        c.parkTimer = now;
+                        c.angle = c.dir > 0 ? 0 : Math.PI;
+                    }
+                } else if (c.parkState === 'parked') {
+                    // ── Phase 3 : garée, attendre 10s ────────────────────────
+                    c.vx = 0; c.vz = 0;
+                    if (now - c.parkTimer > PARK_DURATION) {
+                        c.parkState = 'leaving';
+                    }
+                } else if (c.parkState === 'leaving') {
+                    // ── Phase 4 : quitter Y2, revenir sur Y3 ────────────────
+                    c.targetZ = c.mainZ;
+                    if (Math.abs(c.vx) < c.baseSpeed * 0.5) {
+                        c.vx += c.dir * THRUST * 0.5;
+                    }
+                    if (Math.abs(c.z - c.mainZ) < 0.5) {
+                        c.parkState = null;
+                        c.parkSpot  = null;
+                    }
+                } else {
+                    // ── Circulation normale sur Y3 ───────────────────────────
+                    c.targetZ = c.mainZ;
+                    // Chercher une place libre devant (probabilité)
+                    if (Math.random() < 0.003) {
+                        for (let si = 0; si < PARK_SPOTS.length; si++) {
+                            const spot  = PARK_SPOTS[si];
+                            const ahead = c.dir * (spot.x - c.x);
+                            if (ahead > 2 && ahead < PARK_APPROACH) {
+                                let occupied = false;
+                                for (const other of _cars) {
+                                    if (other === c) continue;
+                                    if (other.parkSpot === si && other.parkState) {
+                                        occupied = true; break;
+                                    }
+                                }
+                                if (!occupied) {
+                                    c.parkState = 'braking';
+                                    c.parkSpot  = si;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+            } else {
+                // ══ Route du haut : dépassement classique ════════════════
+                // Civil : se rabattre si police arrive par derrière sur la voie de dépassement
+                if (c.overtaking) {
+                    let policeApproaching = false;
+                    for (const other of _cars) {
+                        if (!other.isPolice || other.road !== c.road) continue;
+                        const behind = c.dir * (other.x - c.x);
+                        if (behind > -LOOK_AHEAD && behind < SAFE_GAP + 4 && Math.abs(other.z - c.overtakeZ) < 2.5) {
+                            policeApproaching = true; break;
+                        }
+                    }
+                    if (policeApproaching) {
+                        c.targetZ = c.mainZ;
+                        c.overtaking = false;
+                    }
+                }
+
+                // 5) Dépassement (monter sur la voie de gauche = la plus haute)
+                if (!c.overtaking && closestCar && closestDist < LOOK_AHEAD) {
+                    if (Math.abs(c.vx) > Math.abs(closestCar.vx) * 1.1) {
+                        let overtakeFree = true;
+                        for (const other of _cars) {
+                            if (other === c || other.road !== c.road) continue;
+                            const dx = c.dir * (other.x - c.x);
+                            if (dx > -SAFE_GAP && dx < LOOK_AHEAD && Math.abs(other.z - c.overtakeZ) < 2.5) {
+                                overtakeFree = false; break;
+                            }
+                        }
+                        if (overtakeFree) {
+                            c.targetZ    = c.overtakeZ;
+                            c.overtaking = true;
+                            c._overtakeX = closestCar.x;
+                        }
+                    }
+                }
+
+                // 6) Retour voie principale après dépassement
+                if (c.overtaking) {
+                    if (c.dir * (c.x - c._overtakeX) > SAFE_GAP + 2) {
+                        let clear = true;
+                        for (const other of _cars) {
+                            if (other === c || other.road !== c.road) continue;
+                            if (Math.abs(other.x - c.x) < SAFE_GAP && Math.abs(other.z - c.mainZ) < 2.5) {
+                                clear = false; break;
+                            }
+                        }
+                        if (clear) { c.targetZ = c.mainZ; c.overtaking = false; }
+                    }
+                }
+            }
+
+            // 7) Boucle : haut sort à droite → bas entre à droite ; bas sort à gauche → haut entre à gauche
+            //    Ne pas boucler si la voiture est garée ou en approche
+            if (!c.parkState) {
+                if (c.road === 0 && c.x > ROAD_HALF_LEN)       _switchRoad(c, 1);
+                else if (c.road === 1 && c.x < -ROAD_HALF_LEN) _switchRoad(c, 0);
             }
         }
 
@@ -416,8 +852,8 @@ function _loop() {
         c.x += c.vx;
         c.z += c.vz;
 
+        // ── Orientation (face la direction du mouvement) ─────────────────
         if (!pe) {
-            // ── Braquage progressif IA ────────────────────────────────────
             const sp2 = Math.hypot(c.vx, c.vz);
             if (sp2 > MIN_SPEED * 0.4) {
                 const target = Math.atan2(-c.vz, c.vx);
@@ -432,9 +868,6 @@ function _loop() {
         c.root.position.x = c.x;
         c.root.position.z = c.z;
         c.root.rotation.y = c.angle;
-
-        // ── Sortie d'arène (IA seulement) ────────────────────────────────
-        if (!pe && Math.hypot(c.x, c.z) > ARENA_R) _respawn(c, false);
     }
 
     // ── Collisions OBB ───────────────────────────────────────────────────
@@ -476,6 +909,22 @@ export function disposeTitleScene() {
 
     // Déconnexion socket smartphone
     if (_titleSock) { _titleSock.disconnect(); _titleSock = null; }
+
+    // Nettoyer herbe
+    if (_grassMesh) {
+        _grassMesh.geometry.dispose();
+        _grassMesh.material.map?.dispose();
+        _grassMesh.material.dispose();
+        _grassMesh = null;
+    }
+
+    // Nettoyer routes
+    for (const r of _roadMeshes) {
+        r.geometry.dispose();
+        r.material.map?.dispose();
+        r.material.dispose();
+    }
+    _roadMeshes = [];
 
     // Ne pas disposer le renderer — il est partagé avec le jeu
     renderer.domElement.style.display = 'none'; // caché jusqu'au démarrage du jeu

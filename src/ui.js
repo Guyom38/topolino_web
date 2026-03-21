@@ -109,34 +109,45 @@ function _ensureImages(p) {
     _imgCache.set(p.id, imgs);
 }
 
+const FACE_W = 90, FACE_H = 112;
+
 function _getCard(p, hud) {
     if (_cardEls.has(p.id)) return _cardEls.get(p.id);
 
     const card = document.createElement('div');
     Object.assign(card.style, {
-        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
-        background: 'rgba(0,0,0,0.55)', borderRadius: '14px',
-        padding: '8px 10px 7px',
+        display: 'flex', flexDirection: 'column', alignItems: 'center',
+        background: 'rgba(0,0,0,0.55)', borderRadius: '12px',
+        padding: '6px 6px 5px',
         backdropFilter: 'blur(6px)',
-        minWidth: '84px',
+        minWidth: (FACE_W + 12) + 'px',
         boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
+        overflow: 'hidden',
     });
 
-    // Canvas visage (cercle)
+    // Canvas visage (rectangle buste)
     const face = document.createElement('canvas');
-    face.width  = 76;
-    face.height = 76;
+    face.width  = FACE_W;
+    face.height = FACE_H;
     Object.assign(face.style, {
-        width: '76px', height: '76px', borderRadius: '50%',
-        border: `5px solid ${p.colorHex}`, display: 'block',
-        boxShadow: `0 0 0 2px rgba(0,0,0,0.5), 0 4px 14px rgba(0,0,0,0.6)`,
+        width: FACE_W + 'px', height: FACE_H + 'px',
+        borderRadius: '8px',
+        display: 'block',
+    });
+
+    // Trait coloré
+    const line = document.createElement('div');
+    Object.assign(line.style, {
+        width: '100%', height: '3px', margin: '4px 0 3px',
+        background: p.colorHex, borderRadius: '2px',
     });
 
     const nameEl = document.createElement('div');
     Object.assign(nameEl.style, {
-        color: '#fff', fontSize: '12px', fontWeight: '700',
-        maxWidth: '84px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        textAlign: 'center',
+        color: '#fff', fontSize: '13px', fontWeight: '800',
+        maxWidth: (FACE_W + 8) + 'px', overflow: 'hidden',
+        textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        textAlign: 'center', letterSpacing: '0.5px',
     });
     nameEl.textContent = p.name;
 
@@ -147,56 +158,57 @@ function _getCard(p, hud) {
     });
     scoreEl.textContent = '0';
 
-    card.append(face, nameEl, scoreEl);
+    card.append(face, line, nameEl, scoreEl);
     hud.appendChild(card);
 
-    const el = { card, face, nameEl, scoreEl };
+    const el = { card, face, line, nameEl, scoreEl };
     _cardEls.set(p.id, el);
     return el;
 }
 
 function _drawFace(canvas, p) {
+    const w = canvas.width, h = canvas.height;
     const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, 76, 76);
-
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(38, 38, 38, 0, Math.PI * 2);
-    ctx.clip();
+    ctx.clearRect(0, 0, w, h);
 
     // 1) Avatar sprite sheet (grille 3×2)
     const avatarImg = p.avatar ? _avatarImgs.get(p.avatar) : null;
     if (avatarImg && avatarImg.complete && avatarImg.naturalWidth > 0) {
         const col = p.expressionIndex % 3;
         const row = Math.floor(p.expressionIndex / 3);
-        const sw  = avatarImg.naturalWidth  / 3;
-        const sh  = avatarImg.naturalHeight / 2;
-        ctx.drawImage(avatarImg, col * sw, row * sh, sw, sh, 0, 0, 76, 76);
+        const cellW = avatarImg.naturalWidth  / 3;
+        const cellH = avatarImg.naturalHeight / 2;
+        // Petit inset pour éviter le bleed entre cellules
+        const inset = 2;
+        const sx = col * cellW + inset;
+        const sy = row * cellH + inset;
+        const sw = cellW - inset * 2;
+        const sh = cellH - inset * 2;
+        ctx.drawImage(avatarImg, sx, sy, sw, sh, 0, 0, w, h);
     }
     // 2) Photos mobile (ancien système)
     else {
         const imgs = _imgCache.get(p.id);
         const img  = imgs && imgs[p.expressionIndex];
         if (img && img.complete && img.naturalWidth > 0) {
-            ctx.drawImage(img, 0, 0, 76, 76);
+            ctx.drawImage(img, 0, 0, w, h);
         } else {
             // Fallback : fond couleur + initiale
             ctx.fillStyle = p.colorHex;
-            ctx.fillRect(0, 0, 76, 76);
-            ctx.font         = 'bold 36px Arial';
+            ctx.fillRect(0, 0, w, h);
+            ctx.font         = 'bold 40px Arial';
             ctx.textAlign    = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillStyle    = 'rgba(255,255,255,0.9)';
-            ctx.fillText((p.name[0] || '?').toUpperCase(), 38, 38);
+            ctx.fillText((p.name[0] || '?').toUpperCase(), w / 2, h / 2);
         }
     }
-    ctx.restore();
 
     // Couronne si bagage
     if (p.hasLuggage) {
-        ctx.font      = '18px Arial';
+        ctx.font      = '20px Arial';
         ctx.textAlign = 'center';
-        ctx.fillText('👑', 38, 14);
+        ctx.fillText('👑', w / 2, 16);
     }
 }
 
@@ -232,9 +244,9 @@ function _updatePlayerCards(players) {
         _drawFace(el.face, p);
 
         // Méta
-        el.nameEl.textContent     = p.name;
-        el.face.style.borderColor = p.colorHex;
-        el.scoreEl.textContent    = hits;
+        el.nameEl.textContent       = p.name;
+        el.line.style.background    = p.colorHex;
+        el.scoreEl.textContent      = hits;
     }
 
     // Supprimer les cartes des joueurs partis
