@@ -7,6 +7,8 @@ import { localKeys } from './input.js';
 
 export const players = new Map();   // playerId → PlayerCar
 const LOCAL_ID = 'local';
+const AVATARS  = ['Antonio', 'Anais', 'Kitty', 'Sergio'];
+let _avatarIdx = 0;
 
 let localPlayer = null;
 
@@ -101,9 +103,11 @@ export async function initMultiplayer() {
     gamepadPlayers.clear();
 
     _localCarSpawned = false;
+    _avatarIdx = 0;
 
     // Joueur local (clavier) — la voiture n'apparaît qu'au premier appui sur une touche
     localPlayer = new PlayerCar(LOCAL_ID, 'Joueur 1', '#B7D1C4', true);
+    localPlayer.avatar = AVATARS[_avatarIdx++ % AVATARS.length];
     localPlayer.keys = localKeys;   // référence directe aux touches clavier
     players.set(LOCAL_ID, localPlayer);
 
@@ -190,6 +194,7 @@ function _connectToServer() {
 
 async function _addRemote(id, name, color) {
     const p = new PlayerCar(id, name, color, false);
+    p.avatar = AVATARS[_avatarIdx++ % AVATARS.length];
     players.set(id, p);
 
     await loadCarForPlayer(p);

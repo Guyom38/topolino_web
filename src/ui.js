@@ -84,12 +84,19 @@ function _getHud() {
 }
 
 // Cache des éléments DOM et images par joueur
-const _cardEls  = new Map(); // playerId → { card, face, nameEl, scoreEl }
-const _imgCache = new Map(); // playerId → HTMLImageElement[]
+const _cardEls    = new Map(); // playerId → { card, face, nameEl, scoreEl }
+const _imgCache   = new Map(); // playerId → HTMLImageElement[]
+const _avatarImgs = new Map(); // avatarName → HTMLImageElement
+
+function _ensureAvatarImg(avatarName) {
+    if (!avatarName || _avatarImgs.has(avatarName)) return;
+    const img = new Image();
+    img.src = `Asssets/avatars/${avatarName}.png`;
+    _avatarImgs.set(avatarName, img);
+}
 
 function _ensureImages(p) {
     if (_imgCache.has(p.id)) {
-        // Rafraîchir si de nouvelles photos ont été reçues
         const cached = _imgCache.get(p.id);
         if (cached.length === p.photos.length) return;
     }
@@ -157,20 +164,31 @@ function _drawFace(canvas, p) {
     ctx.arc(38, 38, 38, 0, Math.PI * 2);
     ctx.clip();
 
-    const imgs = _imgCache.get(p.id);
-    const img  = imgs && imgs[p.expressionIndex];
-
-    if (img && img.complete && img.naturalWidth > 0) {
-        ctx.drawImage(img, 0, 0, 76, 76);
-    } else {
-        // Fallback : fond couleur + initiale
-        ctx.fillStyle = p.colorHex;
-        ctx.fillRect(0, 0, 76, 76);
-        ctx.font         = 'bold 36px Arial';
-        ctx.textAlign    = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle    = 'rgba(255,255,255,0.9)';
-        ctx.fillText((p.name[0] || '?').toUpperCase(), 38, 38);
+    // 1) Avatar sprite sheet (grille 3×2)
+    const avatarImg = p.avatar ? _avatarImgs.get(p.avatar) : null;
+    if (avatarImg && avatarImg.complete && avatarImg.naturalWidth > 0) {
+        const col = p.expressionIndex % 3;
+        const row = Math.floor(p.expressionIndex / 3);
+        const sw  = avatarImg.naturalWidth  / 3;
+        const sh  = avatarImg.naturalHeight / 2;
+        ctx.drawImage(avatarImg, col * sw, row * sh, sw, sh, 0, 0, 76, 76);
+    }
+    // 2) Photos mobile (ancien système)
+    else {
+        const imgs = _imgCache.get(p.id);
+        const img  = imgs && imgs[p.expressionIndex];
+        if (img && img.complete && img.naturalWidth > 0) {
+            ctx.drawImage(img, 0, 0, 76, 76);
+        } else {
+            // Fallback : fond couleur + initiale
+            ctx.fillStyle = p.colorHex;
+            ctx.fillRect(0, 0, 76, 76);
+            ctx.font         = 'bold 36px Arial';
+            ctx.textAlign    = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle    = 'rgba(255,255,255,0.9)';
+            ctx.fillText((p.name[0] || '?').toUpperCase(), 38, 38);
+        }
     }
     ctx.restore();
 
@@ -185,20 +203,30 @@ function _drawFace(canvas, p) {
 function _updatePlayerCards(players) {
     const hud = _getHud();
 
-    // Déterminer le leader
-    let maxHits = -1;
-    for (const p of players.values()) if (p.car) maxHits = Math.max(maxHits, p.hitCount ?? 0);
+    // Déterminer le leader et le dernier
+    let maxHits = -1, minHits = Infinity;
+    let carCount = 0;
+    for (const p of players.values()) {
+        if (!p.car) continue;
+        carCount++;
+        const h = p.hitCount ?? 0;
+        if (h > maxHits) maxHits = h;
+        if (h < minHits) minHits = h;
+    }
 
     for (const [id, p] of players) {
         if (!p.car) continue;
 
+        if (p.avatar) _ensureAvatarImg(p.avatar);
         if (p.photos.length > 0) _ensureImages(p);
 
         const el = _getCard(p, hud);
 
         // Expression
-        const isLeading = (p.hitCount ?? 0) >= maxHits && maxHits > 0;
-        p.updateExpression(isLeading);
+        const hits = p.hitCount ?? 0;
+        const isLeading = hits >= maxHits && maxHits > 0;
+        const isLast    = carCount > 1 && hits <= minHits && maxHits > minHits;
+        p.updateExpression(isLeading, isLast);
 
         // Visage
         _drawFace(el.face, p);
@@ -206,7 +234,7 @@ function _updatePlayerCards(players) {
         // Méta
         el.nameEl.textContent     = p.name;
         el.face.style.borderColor = p.colorHex;
-        el.scoreEl.textContent    = p.hitCount ?? 0;
+        el.scoreEl.textContent    = hits;
     }
 
     // Supprimer les cartes des joueurs partis

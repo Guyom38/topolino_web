@@ -55,8 +55,10 @@ export class PlayerCar {
         this.luggageScore      = 0;  // secondes de possession accumulées
         this._luggageGotTime   = 0;  // performance.now() quand on a pris le bagage
 
-        // ── Expressions (photos capturées sur mobile) ─────────────────────────
-        // 0=neutre 1=souriant 2=excité 3=en_colère 4=concentré 5=victoire
+        // ── Avatar & Expressions ─────────────────────────────────────────────
+        // Grille 3×2 : [normal, colère, excité] / [surprise, dégoûté, sonné]
+        // 0=normal 1=colère 2=excité 3=surprise 4=dégoûté 5=sonné
+        this.avatar          = null; // nom fichier avatar (ex: 'Antonio')
         this.photos          = [];   // Array<string|null> (base64 JPEG, max 6)
         this.expressionIndex = 0;
         this._exprTimestamps = {};   // { hitOther, gotHit, luggage }
@@ -106,19 +108,22 @@ export class PlayerCar {
         this.photos = photos || [];
     }
 
-    /** Met à jour l'expression en fonction des événements récents et du contexte */
-    updateExpression(isLeading) {
-        const now   = performance.now();
-        const ts    = this._exprTimestamps;
-        const speed = Math.abs(this.carSpeed);
+    /** Met à jour l'expression en fonction des événements récents et du contexte
+     *  Grille 3×2 : 0=normal 1=colère 2=excité 3=surprise 4=dégoûté 5=sonné
+     *  Durée minimale d'une expression = 1s (sauf si une action prioritaire arrive)
+     */
+    updateExpression(isLeading, isLast = false) {
+        const now = performance.now();
+        const ts  = this._exprTimestamps;
 
-        // Priorité : victoire > excité (vol de bagage) > en colère > souriant > concentré > neutre
-        if (isLeading)                                 { this.expressionIndex = 5; return; } // victoire
-        if (ts.hitOther && now - ts.hitOther < 2500)   { this.expressionIndex = 2; return; } // excité
-        if (ts.gotHit   && now - ts.gotHit   < 2500)   { this.expressionIndex = 3; return; } // en colère
-        if (this.hasLuggage)                           { this.expressionIndex = 1; return; } // souriant
-        if (speed > 0.18)                              { this.expressionIndex = 4; return; } // concentré
-        this.expressionIndex = 0; // neutre
+        // Priorité : sonné (collision) > excité (premier) > dégoûté (dernier) > colère (touché autre) > surprise (bagage) > normal
+        if (ts.gotHit   && now - ts.gotHit   < 2000) { this.expressionIndex = 5; return; } // sonné
+        if (ts.hitOther && now - ts.hitOther < 2000)  { this.expressionIndex = 2; return; } // excité
+        if (isLeading)                                { this.expressionIndex = 2; return; } // excité
+        if (isLast)                                   { this.expressionIndex = 4; return; } // dégoûté
+        if (this.hasLuggage)                          { this.expressionIndex = 3; return; } // surprise
+        if (ts.gotHit && now - ts.gotHit < 4000)      { this.expressionIndex = 1; return; } // colère (après sonné)
+        this.expressionIndex = 0; // normal
     }
 
     // ── Label de nom ─────────────────────────────────────────────────────────
