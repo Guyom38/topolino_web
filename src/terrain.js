@@ -55,11 +55,47 @@ export function getHeightAt(x, z) {
 
     const mask = smoothNoise(x * M_SCALE, z * M_SCALE);
     const t    = Math.max(0, (mask - M_THRESHOLD) / (1 - M_THRESHOLD));
-    const h    = base + t * t * base * 2.5;
+    let   h    = base + t * t * base * 2.5;
+
+    // Buttes de saut (conduite libre uniquement — ni chase, ni foot)
+    if (!isChase && !isFoot) h += _jumpBumpAt(x, z);
 
     // En mode poursuite, on surélève tout de 20m pour éviter que les vallées
     // ne descendent sous le seuil de respawn (-15m)
     return isChase ? h + 20.0 : h;
+}
+
+// ── Buttes de saut procédurales (conduite libre uniquement) ───────────────────
+const BUMP_CELL = 70; // une butte possible par cellule de 70×70 unités
+
+function _jumpBumpAt(x, z) {
+    let result = 0;
+    const cx0 = Math.floor(x / BUMP_CELL);
+    const cz0 = Math.floor(z / BUMP_CELL);
+
+    for (let dcx = -1; dcx <= 1; dcx++) {
+        for (let dcz = -1; dcz <= 1; dcz++) {
+            const cx = cx0 + dcx;
+            const cz = cz0 + dcz;
+
+            // ~28% des cellules ont une butte (hash > 0.72)
+            if (hash(cx * 3 + 1, cz * 3 + 2) < 0.72) continue;
+
+            // Centre de la butte, décentré aléatoirement dans la cellule
+            const bx = (cx + hash(cx,      cz     ) * 0.65 + 0.17) * BUMP_CELL;
+            const bz = (cz + hash(cx + 17, cz +  5) * 0.65 + 0.17) * BUMP_CELL;
+
+            const dx = x - bx, dz_ = z - bz;
+            const d  = Math.sqrt(dx * dx + dz_ * dz_);
+            const r  = 9  + hash(cx * 7, cz * 7) * 5;    // rayon 9–14
+            if (d >= r * 2.2) continue;
+
+            const bh = 3.2 + hash(cx * 5, cz * 9) * 2.2; // hauteur 3.2–5.4
+            const nt = Math.max(0, 1.0 - d / (r * 2.2));
+            result  += bh * nt * nt * (3.0 - 2.0 * nt);  // smoothstep
+        }
+    }
+    return result;
 }
 
 const EPS = 0.5;
@@ -90,11 +126,117 @@ const SEG_W   = 32,  SEG_D   = 40;
 const GR = 0.28, GG = 0.52, GB = 0.15; // vert (plat)
 const BR = 0.42, BG = 0.28, BB = 0.12; // marron (pentu)
 
+// ── Texture procédurale de bruit pour l'herbe ─────────────────────────────────
+function _buildGrassMap() {
+    const S = 512;
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = S;
+    const ctx = cv.getContext('2d');
+
+    // Hash déterministe rapide
+    const h = (x, y) => {
+        const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
+        return s - Math.floor(s);
+    };
+    // Bruit lissé bilinéaire
+    const sn = (x, y) => {
+        const ix = Math.floor(x), iy = Math.floor(y);
+        const fx = x - ix, fy = y - iy;
+        const ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy);
+        return h(ix,iy) + (h(ix+1,iy)-h(ix,iy))*ux
+             + (h(ix,iy+1)-h(ix,iy))*uy
+             + (h(ix,iy)-h(ix+1,iy)-h(ix,iy+1)+h(ix+1,iy+1))*ux*uy;
+    };
+
+    // 1. Fond bruit de base pixel par pixel
+    const img = ctx.createImageData(S, S);
+    const d   = img.data;
+    for (let y = 0; y < S; y++) {
+        for (let x = 0; x < S; x++) {
+            const n =  sn(x*0.018, y*0.018) * 0.40
+                     + sn(x*0.07,  y*0.07 ) * 0.28
+                     + sn(x*0.30,  y*0.30 ) * 0.20
+                     + sn(x*1.2,   y*1.2  ) * 0.12;
+            const mow = Math.sin((x + y) * 0.18) * 0.035; // stries tonte
+            const v   = Math.min(1, Math.max(0, 0.50 + n * 0.70 + mow));
+            const c   = Math.floor(v * 255);
+            const i   = (y * S + x) * 4;
+            d[i] = d[i+1] = d[i+2] = c;
+            d[i+3] = 255;
+        }
+    }
+    ctx.putImageData(img, 0, 0);
+
+    // 2. Brins d'herbe dessinés par-dessus (traits courts inclinés)
+    // Utiliser un générateur pseudo-aléatoire déterministe pour les positions
+    let seed = 42;
+    const rng = () => { seed = (seed * 1664525 + 1013904223) & 0xffffffff; return (seed >>> 0) / 0xffffffff; };
+
+    const BLADE_COUNT = 4500;
+    ctx.lineCap = 'round';
+
+    for (let i = 0; i < BLADE_COUNT; i++) {
+        const bx  = rng() * S;
+        const by  = rng() * S;
+        const len = 3 + rng() * 5;             // longueur 3–8px
+        const ang = -Math.PI * 0.5 + (rng() - 0.5) * 1.1; // quasi vertical ± 35°
+        const tx  = bx + Math.cos(ang) * len;
+        const ty  = by + Math.sin(ang) * len;
+
+        // Couleur : vert foncé → vert clair selon hauteur du brin
+        const bright = 0.30 + rng() * 0.45;
+        const r = Math.floor(20  + bright * 35);
+        const g = Math.floor(100 + bright * 90);
+        const b = Math.floor(15  + bright * 30);
+        const alpha = 0.55 + rng() * 0.35;
+
+        ctx.strokeStyle = `rgba(${r},${g},${b},${alpha})`;
+        ctx.lineWidth   = 0.9 + rng() * 0.8;
+        ctx.beginPath();
+        ctx.moveTo(bx, by);
+        ctx.lineTo(tx, ty);
+        ctx.stroke();
+    }
+
+    const tex = new THREE.CanvasTexture(cv);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    return tex;
+}
+
+const _grassTex = _buildGrassMap();
+
+// TILE_SIZE = 5 → divise exactement PATCH_W/2=200 et PATCH_D/2=150
+// → aucune couture visible entre les patches grâce au RepeatWrapping
+const TILE = 5.0;
+
 const terrainMat = new THREE.MeshStandardMaterial({
     vertexColors: true,
-    roughness: 0.90,
+    roughness: 0.92,
     metalness: 0.0,
 });
+
+// Injection du bruit herbe dans le shader via onBeforeCompile
+terrainMat.onBeforeCompile = shader => {
+    shader.uniforms.uGrass = { value: _grassTex };
+
+    // Varying world-XZ basé sur la position locale du plan
+    // PlaneGeometry local : X=world X, Y=-world Z (avant rotation)
+    // → séamless si TILE divise PATCH_D/2 et PATCH_W/2 exactement
+    shader.vertexShader = 'varying vec2 vGrassUV;\n' + shader.vertexShader.replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+         vGrassUV = vec2(position.x, -position.y) * ${(1.0/TILE).toFixed(6)};`
+    );
+
+    shader.fragmentShader = 'varying vec2 vGrassUV;\nuniform sampler2D uGrass;\n'
+        + shader.fragmentShader.replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+         float gn = texture2D(uGrass, vGrassUV).r;
+         // 0.6 + gn*0.8 → plage 0.6–1.4, centrée sur 1.0 quand gn=0.5
+         diffuseColor.rgb *= (0.60 + gn * 0.80);`
+    );
+};
 
 function recomputePatch(mesh) {
     const cz  = mesh.position.z;
@@ -141,20 +283,27 @@ function createPatch(centerZ) {
     return mesh;
 }
 
-const patches = [
-    createPatch(0),
-    createPatch(-PATCH_D),
-    createPatch(-2 * PATCH_D),
-];
+let patches = null;
+
+function _ensurePatches() {
+    if (patches) return;
+    patches = [
+        createPatch(0),
+        createPatch(-PATCH_D),
+        createPatch(-2 * PATCH_D),
+    ];
+}
 
 export function refreshTerrain() {
+    _ensurePatches();
     for (const p of patches) recomputePatch(p);
 }
 
 export function updateTerrain(carZ) {
+    _ensurePatches();
     const isChase = new URLSearchParams(window.location.search).get('mode') === 'chase';
     if (isChase) return; // Pas de défilement en mode poursuite
-    
+
     for (const p of patches) {
         const cz = p.position.z;
         if (cz > carZ + PATCH_D) {

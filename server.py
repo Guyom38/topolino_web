@@ -177,8 +177,25 @@ socketio.start_background_task(cleanup_inactive)
 
 if __name__ == '__main__':
     ip = get_local_ip()
+    # Détection SSL : si cert.pem et key.pem existent, on lance en HTTPS (requis pour caméra iPhone)
+    ssl_ctx = None
+    cert_file = os.path.join(BASE_DIR, 'cert.pem')
+    key_file  = os.path.join(BASE_DIR, 'key.pem')
+    protocol  = 'http'
+    if os.path.exists(cert_file) and os.path.exists(key_file):
+        import ssl
+        ssl_ctx  = (cert_file, key_file)
+        protocol = 'https'
+
     print(f'\n🚗  Topolino Multijoueur')
-    print(f'    Affichage : http://{ip}:5000')
-    print(f'    Mobile    : http://{ip}:5000/mobile')
+    print(f'    Affichage : {protocol}://{ip}:5000')
+    print(f'    Mobile    : {protocol}://{ip}:5000/mobile')
+    if protocol == 'https':
+        print(f'    ✅ HTTPS actif — caméra iPhone disponible')
+    else:
+        print(f'    ⚠️  HTTP seulement — caméra iPhone bloquée (générez cert.pem/key.pem)')
     print(f'    (Scannez le QR code depuis l\'écran de jeu)\n')
-    socketio.run(app, host='0.0.0.0', port=5000, debug=False)
+    if ssl_ctx:
+        socketio.run(app, host='0.0.0.0', port=5000, debug=False, ssl_context=ssl_ctx)
+    else:
+        socketio.run(app, host='0.0.0.0', port=5000, debug=False)

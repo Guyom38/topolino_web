@@ -4,7 +4,7 @@ import { camera } from './scene.js';
 // ── Paramètres orbitaux ───────────────────────────────────────────────────────
 let PHI    = 0.92;           // angle vertical depuis le zénith (rad)
 let THETA  = Math.PI * 0.80; // angle horizontal (rad)
-let RADIUS = 55;             // distance caméra–cible (auto-gérée en mode conduite)
+let RADIUS = 28;             // distance caméra–cible (auto-gérée en mode conduite)
 
 const RADIUS_MIN  = 10;
 const RADIUS_MAX  = 200;
@@ -151,8 +151,8 @@ export function updateCamera(players) {
     // Auto-zoom dynamique (mode conduite uniquement)
     if (_autoZoom) {
         const span        = Math.max(maxX - minX, maxZ - minZ);
-        // Rayon auto : base 42 + 1.2× l'écartement max des joueurs
-        const autoRadius  = THREE.MathUtils.clamp(span * 1.2 + 42, 38, 160);
+        // Rayon auto : base 22 + 0.7× l'écartement max des joueurs
+        const autoRadius  = THREE.MathUtils.clamp(span * 0.7 + 22, 20, 90);
         const targetRadius = THREE.MathUtils.clamp(autoRadius + _userZoom, RADIUS_MIN, RADIUS_MAX);
         // Interpolation fluide pour éviter les sauts
         RADIUS += (targetRadius - RADIUS) * 0.045;

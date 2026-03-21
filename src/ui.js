@@ -15,14 +15,28 @@ function _generateQR(url) {
     qrGenerated = true;
     const el = document.getElementById('qr-canvas');
     if (!el) return;
-    new QRCode(el, { text: url, width: 96, height: 96,
+    new QRCode(el, { text: url, width: 80, height: 80,
         colorDark: '#000', colorLight: '#fff', correctLevel: QRCode.CorrectLevel.M });
     const lbl = document.getElementById('qr-label');
     if (lbl) lbl.textContent = url.replace(/^https?:\/\//, '');
 }
 
+// ── FPS counter global ────────────────────────────────────────────────────────
+let _fpsFrames = 0, _fpsLast = performance.now(), _fpsEl = null;
+function _updateFPS() {
+    _fpsFrames++;
+    const now = performance.now();
+    if (now - _fpsLast >= 1000) {
+        if (!_fpsEl) _fpsEl = document.getElementById('fps-counter');
+        if (_fpsEl) _fpsEl.textContent = 'FPS: ' + Math.round(_fpsFrames * 1000 / (now - _fpsLast));
+        _fpsLast   = now;
+        _fpsFrames = 0;
+    }
+}
+
 // ── Mise à jour HUD ──────────────────────────────────────────────────────────
 export function updateUI(players) {
+    _updateFPS();
     _updatePlayerCards(players);
     _updateCamDebug();
 }
@@ -37,14 +51,14 @@ function _getHud() {
         _hudEl = document.createElement('div');
         _hudEl.id = 'players-hud';
         Object.assign(_hudEl.style, {
-            position: 'absolute', top: '10px', left: '50%',
-            transform: 'translateX(-50%)',
-            display: 'flex', gap: '10px', flexWrap: 'nowrap',
-            alignItems: 'flex-start', justifyContent: 'center',
-            pointerEvents: 'none', zIndex: '90',
-            maxWidth: 'calc(100vw - 230px)', // laisser place au QR code
+            display: 'flex', flexDirection: 'column', gap: '8px',
+            alignItems: 'center', marginTop: '8px',
+            pointerEvents: 'none',
         });
-        document.body.appendChild(_hudEl);
+        // Insérer sous le QR code si disponible, sinon fallback
+        const qrWrap = document.getElementById('qr-wrap');
+        if (qrWrap) qrWrap.appendChild(_hudEl);
+        else document.body.appendChild(_hudEl);
     }
     return _hudEl;
 }

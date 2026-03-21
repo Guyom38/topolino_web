@@ -1,4 +1,5 @@
 import { COLLISION_RADIUS } from './PlayerCar.js';
+import { spawnSparks } from './sparks.js';
 
 const DIAM        = COLLISION_RADIUS * 2;
 const RESTITUTION = 0.92;   // rebond très nerveux
@@ -37,6 +38,11 @@ export function updateCollisions(players, staticCars = [], restitutionMult = 1.0
                 const imp = relV * RESTITUTION * restitutionMult;
                 a.velocity.x -= imp * nx;  a.velocity.z -= imp * nz;
                 b.velocity.x += imp * nx;  b.velocity.z += imp * nz;
+
+                // Étincelles au point de contact
+                const mx = (a.car.position.x + b.car.position.x) * 0.5;
+                const mz = (a.car.position.z + b.car.position.z) * 0.5;
+                spawnSparks(mx, 0.06, mz, nx, nz, relV);
 
                 // ── Spin angulaire selon la composante latérale de l'impact ──
                 const aLat = nx *  Math.cos(a.carAngle) - nz * Math.sin(a.carAngle);
@@ -107,6 +113,11 @@ export function updateCollisions(players, staticCars = [], restitutionMult = 1.0
 
                 const aLat = nx * Math.cos(a.carAngle) - nz * Math.sin(a.carAngle);
                 a.carAngle -= aLat * imp * SPIN_FACTOR * 0.5;
+
+                // Étincelles sur le point de contact côté joueur
+                const cx = a.car.position.x + nx * COLLISION_RADIUS;
+                const cz = a.car.position.z + nz * COLLISION_RADIUS;
+                spawnSparks(cx, 0.06, cz, nx, nz, aVn, 14);
             }
 
             const jolt = aVn * 0.08;

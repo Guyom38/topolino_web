@@ -28,7 +28,10 @@ export function createTrackSystem() {
         const { car, carSpeed, carAngle } = p;
         if (!car || Math.abs(carSpeed) < 0.03) return;
         if (!p.onGround) return;
-        if (!isOnDirt(car.position.x, car.position.z)) return;
+        // Émettre si : huile | mode terrain (herbe ou terre) | pente marron
+        // p._getTrackY est défini dans les modes plats (circuit/parking) → pas de traces
+        const onTerrain = !p._getTrackY;
+        if (!p._onOil && !onTerrain && !isOnDirt(car.position.x, car.position.z)) return;
 
         const sa = Math.sin(carAngle), ca = Math.cos(carAngle);
         const HWB = config.wheelBase / 2;
@@ -45,7 +48,7 @@ export function createTrackSystem() {
         ];
 
         const mat = new THREE.ShaderMaterial({
-            uniforms: { uOpacity: { value: 0.85 }, uSeed: { value: Math.random() * 100 } },
+            uniforms: { uOpacity: { value: p._onOil ? 1.0 : isOnDirt(car.position.x, car.position.z) ? 0.85 : 0.55 }, uSeed: { value: Math.random() * 100 } },
             vertexShader: VERT, fragmentShader: FRAG,
             transparent: true, depthWrite: false,
         });
@@ -67,7 +70,8 @@ export function createTrackSystem() {
 
             const m = new THREE.Mesh(new THREE.PlaneGeometry(config.trackWidth, segLen), mat);
             m.quaternion.setFromRotationMatrix(m4);
-            m.position.set(wx, getHeightAt(wx, wz) + 0.04, wz);
+            const groundY = p._getTrackY ? p._getTrackY(wx, wz) : getHeightAt(wx, wz);
+            m.position.set(wx, groundY + 0.04, wz);
             trackGroup.add(m);
             return m;
         });

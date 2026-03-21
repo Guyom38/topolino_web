@@ -10,7 +10,10 @@ export const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-document.body.appendChild(renderer.domElement);
+// N'attacher le canvas que si un mode de jeu est actif (pas au menu)
+if (new URLSearchParams(window.location.search).get('mode')) {
+    document.body.appendChild(renderer.domElement);
+}
 
 // Lumière ambiante
 scene.add(new THREE.AmbientLight(0xd0e8ff, 0.18));

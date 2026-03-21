@@ -3,113 +3,475 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Topolino Car Game</title>
+    <title>GTA — Game Topolino Amandine</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #87CEEB; font-family: 'Segoe UI', sans-serif; }
-        @keyframes parkingBlink { 0%,100%{opacity:1} 50%{opacity:0.15} }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: #000;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            overflow: hidden;
+            color: #fff;
+            height: 100vh; width: 100vw;
+            user-select: none;
+        }
+
         canvas { display: block; }
 
-        /* ── QR Code (haut-droite) ── */
+        /* ═══ SCREENS ═══ */
+        .screen {
+            position: fixed; inset: 0;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            z-index: 500;
+        }
+        .screen.hidden { display: none !important; }
+
+        /* ═══ TITLE SCREEN ═══ */
+        #title-screen {
+            background: radial-gradient(ellipse at 50% 35%, #0a1828 0%, #000510 75%);
+            cursor: pointer;
+        }
+        #cars-bg {
+            position: absolute; inset: 0;
+            width: 100%; height: 100%;
+            pointer-events: none; z-index: 0;
+        }
+        #title-screen::before {
+            content: '';
+            position: absolute; inset: 0;
+            background-image:
+                linear-gradient(rgba(0,200,255,0.032) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,200,255,0.032) 1px, transparent 1px);
+            background-size: 50px 50px;
+            animation: gridScroll 25s linear infinite;
+            pointer-events: none;
+        }
+        @keyframes gridScroll {
+            from { background-position: 0 0; }
+            to   { background-position: 50px 50px; }
+        }
+        #title-screen::after {
+            content: '';
+            position: absolute; bottom: 0; left: 0; right: 0; height: 30vh;
+            background: linear-gradient(to top, rgba(20,20,30,0.85) 0%, transparent 100%);
+            pointer-events: none;
+        }
+
+        .title-content { position: relative; z-index: 1; text-align: center; }
+
+        .title-gta {
+            font-size: clamp(96px, 18vw, 200px);
+            font-weight: 900; letter-spacing: 0.08em; line-height: 1;
+            background: linear-gradient(160deg, #ff9f1c 0%, #ffcc00 45%, #ff6b1c 85%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: titleGlow 3s ease-in-out infinite;
+        }
+        @keyframes titleGlow {
+            0%,100% { filter: drop-shadow(0 0 28px rgba(255,155,0,0.45)); }
+            50%      { filter: drop-shadow(0 0 70px rgba(255,200,0,0.9)); }
+        }
+        .title-sub  { font-size: clamp(11px,2vw,18px); letter-spacing:.55em; color:rgba(255,255,255,.5); margin-top:7px; text-transform:uppercase; }
+        .title-year { font-size: 11px; letter-spacing:.4em; color:rgba(255,255,255,.18); margin-top:14px; text-transform:uppercase; }
+        .press-key  {
+            margin-top: 62px;
+            font-size: clamp(11px,1.8vw,16px); letter-spacing:.45em;
+            text-transform:uppercase; color:#ffcc00;
+            animation: blink 1.15s step-end infinite;
+        }
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+        /* ═══ VIDEO SCREEN ═══ */
+        #video-screen { background:#000; cursor:pointer; }
+        #intro-video  { max-width:100%; max-height:100%; object-fit:contain; }
+        .skip-hint {
+            position:absolute; bottom:28px; right:36px;
+            font-size:12px; letter-spacing:.3em; color:rgba(255,255,255,.28);
+            text-transform:uppercase; animation:blink 2s step-end infinite;
+        }
+
+        /* ═══ MENU SCREEN ═══ */
+        #menu-screen {
+            background: linear-gradient(145deg, #03080f 0%, #060e1a 50%, #03080f 100%);
+            overflow-y: auto; padding: 24px 20px 22px; gap: 22px; align-items:center;
+        }
+        .menu-header { text-align:center; }
+        .menu-gta {
+            font-size: clamp(32px,5.5vw,62px); font-weight:900; letter-spacing:.12em;
+            background: linear-gradient(135deg,#ff9f1c,#ffcc00,#ff6b1c);
+            -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+        }
+        .menu-sub     { font-size:clamp(9px,1.4vw,13px); letter-spacing:.55em; color:rgba(255,255,255,.32); text-transform:uppercase; margin-top:5px; }
+        .menu-tagline { font-size:12px; color:rgba(255,255,255,.18); margin-top:8px; }
+
+        .modes-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(162px, 1fr));
+            gap: 12px; width:100%; max-width:1120px;
+        }
+        .mode-card {
+            position:relative;
+            background:rgba(255,255,255,.035);
+            border:1px solid rgba(255,255,255,.07);
+            border-radius:18px; padding:20px 16px 18px;
+            cursor:pointer; text-align:center; overflow:hidden;
+            transition: transform .18s, border-color .18s, background .18s, box-shadow .18s;
+        }
+        .mode-card::before {
+            content:''; position:absolute; inset:0;
+            background:radial-gradient(circle at 50% -10%,rgba(255,255,255,.06) 0%,transparent 65%);
+            opacity:0; transition:opacity .2s;
+        }
+        .mode-card:hover {
+            transform:translateY(-5px);
+            border-color:rgba(255,200,0,.45);
+            background:rgba(255,200,0,.07);
+            box-shadow:0 10px 40px rgba(0,0,0,.7),0 0 0 1px rgba(255,200,0,.22);
+        }
+        .mode-card:hover::before { opacity:1; }
+        .mode-card:active { transform:translateY(-2px); }
+        .mode-card .icon  { font-size:38px; display:block; margin-bottom:10px; }
+        .mode-card .name  { font-size:15px; font-weight:800; color:#fff; letter-spacing:.04em; }
+        .mode-card .desc  { font-size:10px; color:rgba(255,255,255,.36); margin-top:7px; line-height:1.55; }
+        .mode-card .badge {
+            position:absolute; top:10px; right:10px;
+            background:#ff6b1c; color:#fff; font-size:8px; font-weight:900;
+            padding:3px 8px; border-radius:20px; letter-spacing:.1em; text-transform:uppercase;
+        }
+
+        .menu-footer {
+            display:flex; align-items:center; gap:18px;
+            font-size:12px; color:rgba(255,255,255,.26);
+            flex-wrap:wrap; justify-content:center;
+        }
+        .menu-qr-wrap {
+            background:#fff; border-radius:8px; padding:4px;
+            width:68px; height:68px; overflow:hidden; flex-shrink:0;
+        }
+        .sep { width:1px; height:48px; background:rgba(255,255,255,.1); }
+
+        /* ═══ IN-GAME UI ═══ */
+        #game-ui { position:fixed; inset:0; pointer-events:none; z-index:90; }
+
         #qr-wrap {
-            position: absolute; top: 10px; right: 10px;
-            background: rgba(255,255,255,0.92); border-radius: 10px;
-            padding: 8px 8px 4px;
-            display: flex; flex-direction: column; align-items: center; gap: 4px;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.3);
-            pointer-events: none; z-index: 95;
+            position:absolute; top:10px; right:10px;
+            background:rgba(255,255,255,.93); border-radius:10px;
+            padding:7px 7px 4px;
+            display:flex; flex-direction:column; align-items:center; gap:3px;
+            box-shadow:0 2px 14px rgba(0,0,0,.35);
         }
-        #qr-canvas { width: 96px; height: 96px; }
-        #qr-label  { font-size: 9px; color: #333; text-align: center; max-width: 96px;
-                     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        #qr-hint   { font-size: 10px; color: #555; font-weight: 600; }
+        #qr-canvas { width:80px; height:80px; }
+        #qr-label  { font-size:8px; color:#333; max-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        #qr-hint   { font-size:10px; color:#555; font-weight:700; }
 
-        /* ── Debug caméra (bas-gauche) ── */
+        #fps-counter {
+            position:absolute; top:10px; left:10px;
+            color:rgba(255,255,255,.38); font-family:monospace; font-size:11px;
+            text-shadow:1px 1px 3px black; pointer-events:none;
+        }
+
         #cam-debug {
-            position: absolute; bottom: 10px; left: 10px;
-            background: rgba(0,0,0,0.55); color: #0ff;
-            font-family: monospace; font-size: 12px; line-height: 1.7;
-            padding: 6px 10px; border-radius: 6px;
-            pointer-events: none; z-index: 95;
+            position:absolute; bottom:46px; left:14px;
+            background:rgba(0,0,0,.6); color:#0ff;
+            font-family:monospace; font-size:11px; line-height:1.7;
+            padding:5px 10px; border-radius:6px;
+            pointer-events:none; display:none;
         }
 
-        /* ── Barre de modes (bas-centre) ── */
-        #mode-bar {
-            position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
-            display: flex; gap: 6px; align-items: center;
-            pointer-events: auto; z-index: 95;
+        #back-btn {
+            position:absolute; bottom:14px; left:14px;
+            background:rgba(0,0,0,.62); color:rgba(255,255,255,.65);
+            border:1px solid rgba(255,255,255,.14); border-radius:22px;
+            padding:8px 18px; font-size:12px; font-weight:700;
+            cursor:pointer; pointer-events:auto; backdrop-filter:blur(8px);
+            transition:all .15s; letter-spacing:.1em; text-transform:uppercase;
         }
-        .mode-btn {
-            background: rgba(0,0,0,0.55); color: #fff; border: none;
-            border-radius: 24px; padding: 8px 16px;
-            font-size: 13px; font-weight: 700;
-            cursor: pointer; backdrop-filter: blur(6px);
-            transition: background 0.15s, transform 0.1s;
-            white-space: nowrap;
+        #back-btn:hover { background:rgba(255,200,0,.15); color:#ffcc00; border-color:rgba(255,200,0,.4); }
+
+        #mode-label {
+            position:absolute; bottom:18px; left:50%; transform:translateX(-50%);
+            font-size:11px; letter-spacing:.25em;
+            color:rgba(255,255,255,.28); text-transform:uppercase;
+            pointer-events:none;
         }
-        .mode-btn:hover  { background: rgba(255,255,255,0.18); transform: translateY(-2px); }
-        .mode-btn.active { background: rgba(255,200,0,0.80); color: #000; }
-        .mode-btn.wip    { opacity: 0.45; cursor: default; }
-        .mode-btn.wip:hover { transform: none; background: rgba(0,0,0,0.55); }
+
+        @keyframes parkingBlink { 0%,100%{opacity:1} 50%{opacity:0.15} }
     </style>
 </head>
 <body>
 
-    <!-- QR Code -->
+<!-- ═══ TITLE SCREEN ═══ -->
+<div id="title-screen" class="screen">
+    <canvas id="cars-bg"></canvas>
+    <div class="title-content">
+        <div class="title-gta">GTA</div>
+        <div class="title-sub">Game Topolino Amandine</div>
+        <div class="title-year">Édition Spéciale · 2026</div>
+        <div class="press-key">Appuyez sur une touche</div>
+    </div>
+</div>
+
+<!-- ═══ VIDEO SCREEN ═══ -->
+<div id="video-screen" class="screen hidden">
+    <video id="intro-video" playsinline muted></video>
+    <div class="skip-hint">Cliquer pour passer</div>
+</div>
+
+<!-- ═══ MENU SCREEN ═══ -->
+<div id="menu-screen" class="screen hidden">
+    <div class="menu-header">
+        <div class="menu-gta">GTA</div>
+        <div class="menu-sub">Game Topolino Amandine</div>
+        <div class="menu-tagline">Choisissez votre mode de jeu</div>
+    </div>
+
+    <div class="modes-grid">
+        <div class="mode-card" onclick="go('drive')">
+            <span class="icon">🏔</span>
+            <div class="name">Conduite Libre</div>
+            <div class="desc">Terrain infini avec relief, montagnes et physique drift</div>
+        </div>
+        <div class="mode-card" onclick="go('circuit')">
+            <span class="icon">🏁</span>
+            <div class="name">Circuit</div>
+            <div class="desc">Course sur circuit — feux, caméra leader, 5 pts pour gagner</div>
+            <span class="badge">NEW</span>
+        </div>
+        <div class="mode-card" onclick="go('chase')">
+            <span class="icon">🧳</span>
+            <div class="name">Poursuite</div>
+            <div class="desc">Vole la valise et garde-la le plus longtemps possible !</div>
+        </div>
+        <div class="mode-card" onclick="go('parking')">
+            <span class="icon">🅿</span>
+            <div class="name">Parking</div>
+            <div class="desc">Gare ta voiture dans les emplacements en un minimum de temps</div>
+        </div>
+        <div class="mode-card" onclick="go('tron')">
+            <span class="icon">🌀</span>
+            <div class="name">Tron</div>
+            <div class="desc">Trace des murs lumineux — évite-les pour survivre !</div>
+        </div>
+        <div class="mode-card" onclick="go('derby')">
+            <span class="icon">💥</span>
+            <div class="name">Derby</div>
+            <div class="desc">Pousse tes adversaires hors de l'arène circulaire</div>
+        </div>
+        <div class="mode-card" onclick="go('battle')">
+            <span class="icon">🎈</span>
+            <div class="name">Battle Ballons</div>
+            <div class="desc">Crève tous les ballons de tes adversaires avant eux</div>
+        </div>
+        <div class="mode-card" onclick="go('foot')">
+            <span class="icon">⚽</span>
+            <div class="name">Football</div>
+            <div class="desc">Deux équipes, un ballon géant — marquez des buts !</div>
+        </div>
+    </div>
+
+    <div class="menu-footer">
+        <div class="menu-qr-wrap" id="menu-qr"></div>
+        <div>
+            <div id="menu-qr-url" style="font-size:11px;color:rgba(255,255,255,.38)">chargement…</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.18);margin-top:3px">📱 Scannez pour jouer sur mobile</div>
+        </div>
+        <div class="sep"></div>
+        <div>
+            <div style="font-size:12px;color:rgba(255,255,255,.32)">🎮 Manettes USB détectées automatiquement</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.18);margin-top:3px">F5 pour relancer le même mode · D pour debug caméra</div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ IN-GAME UI ═══ -->
+<div id="game-ui" class="hidden">
     <div id="qr-wrap">
         <div id="qr-hint">📱 Rejoindre</div>
         <div id="qr-canvas"></div>
         <div id="qr-label">chargement…</div>
     </div>
-
-    <!-- Debug caméra (bas-gauche) -->
+    <div id="fps-counter">FPS: —</div>
     <div id="cam-debug">—</div>
-    <div id="fps-counter" style="position: absolute; top: 10px; left: 10px; color: lime; font-family: monospace; font-weight: bold; z-index: 1000; text-shadow: 1px 1px 2px black;">FPS: 60</div>
+    <button id="back-btn" onclick="window.location.href='/'">← Menu</button>
+    <div id="mode-label"></div>
+</div>
 
-    <!-- Barre de modes (bas) -->
-    <div id="mode-bar">
-        <button class="mode-btn" id="btn-drive"   onclick="go('drive')"  >🏔 Conduite</button>
-        <button class="mode-btn" id="btn-chase"   onclick="go('chase')"  >🧳 Poursuite</button>
-        <button class="mode-btn" id="btn-parking" onclick="go('parking')">🅿 Parking</button>
-        <button class="mode-btn" id="btn-tron"   onclick="go('tron')"  >🌀 Tron</button>
-        <button class="mode-btn" id="btn-derby"  onclick="go('derby')" >💥 Derby</button>
-        <button class="mode-btn" id="btn-battle" onclick="go('battle')">🎈 Battle</button>
-        <button class="mode-btn" id="btn-foot"   onclick="go('foot')"  >⚽ Foot</button>
-    </div>
-
-    <!-- Socket.IO -->
-    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
-    <!-- QRCode.js -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <!-- ES module shims + importmap -->
-    <script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
-    <script type="importmap">
-    {
-        "imports": {
-            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-        }
+<!-- Scripts CDN -->
+<script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
+<script type="importmap">
+{
+    "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
     }
-    </script>
+}
+</script>
+
 <script>
-    const mode = new URLSearchParams(location.search).get('mode') ?? 'drive';
-    document.getElementById('btn-' + mode)?.classList.add('active');
+// ════════════════════════════════════════════════════════════════
+//  LOGIQUE D'ÉCRAN
+// ════════════════════════════════════════════════════════════════
+const MODE = new URLSearchParams(location.search).get('mode');
 
-    // Capture d'erreurs pour le debug
-    window.addEventListener('error', function(event) {
-        const errDiv = document.createElement('div');
-        errDiv.style.position = 'absolute';
-        errDiv.style.top = '50px';
-        errDiv.style.left = '50px';
-        errDiv.style.background = 'red';
-        errDiv.style.color = 'white';
-        errDiv.style.zIndex = '9999';
-        errDiv.innerText = event.message + ' at ' + event.filename + ':' + event.lineno;
-        document.body.appendChild(errDiv);
-        });
+// Démarrage direct via URL (?mode=xxx) — F5 ou lien direct
+if (MODE) {
+    document.getElementById('title-screen').classList.add('hidden');
+    document.getElementById('video-screen').classList.add('hidden');
+    document.getElementById('menu-screen').classList.add('hidden');
+    // game-ui et mode-label sont gérés par main.js (_startGameMode)
+} else {
+    _showTitle();
+}
 
-        function go(m) { window.location.href = '?mode=' + m; }
-    </script>
+/* ── Title screen ─────────────────────────────────────────────── */
+function _showTitle() {
+    const el = document.getElementById('title-screen');
+    let armed = false;
+    const go_ = () => {
+        if (!armed) return;
+        el.classList.add('hidden');
+        _checkVideo();
+    };
+    setTimeout(() => {
+        armed = true;
+        document.addEventListener('keydown', e => { _playTick(); go_(); }, { once: true });
+        el.addEventListener('click', () => { _playTick(); go_(); }, { once: true });
+    }, 700);
+}
 
-    <script type="module" src="src/main.js"></script>
+/* ── Vérifier la vidéo intro ──────────────────────────────────── */
+function _checkVideo() {
+    fetch('Asssets/intro.mp4', { method: 'HEAD' })
+        .then(r => r.ok ? _playVideo() : _showMenu())
+        .catch(() => _showMenu());
+}
+
+function _playVideo() {
+    const screen = document.getElementById('video-screen');
+    const video  = document.getElementById('intro-video');
+    screen.classList.remove('hidden');
+    video.src = 'Asssets/intro.mp4';
+    video.addEventListener('ended', () => { screen.classList.add('hidden'); _showMenu(); }, { once: true });
+    screen.addEventListener('click', () => { video.pause(); screen.classList.add('hidden'); _showMenu(); }, { once: true });
+    video.play().catch(() => { screen.classList.add('hidden'); _showMenu(); });
+}
+
+/* ── Menu principal ───────────────────────────────────────────── */
+function _showMenu() {
+    document.getElementById('menu-screen').classList.remove('hidden');
+    _generateMenuQR();
+}
+
+function _generateMenuQR() {
+    if (typeof QRCode === 'undefined') { setTimeout(_generateMenuQR, 300); return; }
+    fetch('/api/info')
+        .then(r => r.json())
+        .then(d => {
+            const url = d.server_url + '/mobile';
+            const el  = document.getElementById('menu-qr');
+            const lbl = document.getElementById('menu-qr-url');
+            if (el && !el.firstChild) {
+                new QRCode(el, { text: url, width: 60, height: 60,
+                    colorDark: '#000', colorLight: '#fff', correctLevel: QRCode.CorrectLevel.M });
+            }
+            if (lbl) lbl.textContent = url.replace(/^https?:\/\//, '');
+        })
+        .catch(() => {});
+}
+
+/* ── Son synthétique UI (Web Audio API — pas de fichier) ──────── */
+let _uiAc = null;
+function _getAC() {
+    if (!_uiAc || _uiAc.state === 'closed') _uiAc = new AudioContext();
+    if (_uiAc.state === 'suspended') _uiAc.resume();
+    return _uiAc;
+}
+function _playTick() {           // hover léger
+    try {
+        const ac = _getAC(), t = ac.currentTime;
+        const o = ac.createOscillator(), g = ac.createGain();
+        o.frequency.setValueAtTime(1100, t);
+        g.gain.setValueAtTime(0.06, t);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.04);
+        o.connect(g); g.connect(ac.destination);
+        o.start(t); o.stop(t + 0.04);
+    } catch(e) {}
+}
+function _playClick() {          // clic de sélection
+    try {
+        const ac = _getAC(), t = ac.currentTime;
+        const o = ac.createOscillator(), g = ac.createGain();
+        o.type = 'sine';
+        o.frequency.setValueAtTime(900, t);
+        o.frequency.exponentialRampToValueAtTime(440, t + 0.12);
+        g.gain.setValueAtTime(0.18, t);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.15);
+        o.connect(g); g.connect(ac.destination);
+        o.start(t); o.stop(t + 0.15);
+    } catch(e) {}
+}
+
+/* ── Lancer un mode SANS rechargement de page ─────────────────── */
+/* Le clic reste dans la chaîne du geste → autoplay audio garanti */
+function go(mode) {
+    _playClick();   // son de clic immédiat (débloque l'audio context)
+
+    // Masquer les écrans de navigation
+    ['title-screen','video-screen','menu-screen'].forEach(id =>
+        document.getElementById(id)?.classList.add('hidden')
+    );
+
+    // Mettre à jour l'URL sans rechargement (pour que F5 relance le mode)
+    history.pushState({ mode }, '', '?mode=' + mode);
+
+    // Démarrer le mode — main.js a exposé cette fonction
+    // startMusic() sera appelé DANS la même chaîne synchrone → autoplay ✓
+    if (window._startGameMode) {
+        window._startGameMode(mode);
+    } else {
+        // Fallback : main.js pas encore chargé, attendre
+        const wait = setInterval(() => {
+            if (window._startGameMode) { clearInterval(wait); window._startGameMode(mode); }
+        }, 50);
+    }
+}
+
+/* ── Son de hover sur les cartes de mode ─────────────────────── */
+document.querySelectorAll('.mode-card').forEach(card => {
+    card.addEventListener('mouseenter', _playTick, { passive: true });
+});
+
+/* ── Toggle debug caméra (touche D) ──────────────────────────── */
+document.addEventListener('keydown', e => {
+    if (e.key === 'd' || e.key === 'D') {
+        const dbg = document.getElementById('cam-debug');
+        if (dbg) dbg.style.display = dbg.style.display === 'none' ? 'block' : 'none';
+    }
+});
+
+/* ── Topolino 3D défilant sur le titre → géré par src/titleScene.js ─── */
+
+/* ── Capture erreurs JS ──────────────────────────────────────── */
+window.addEventListener('error', ev => {
+    const d = document.createElement('div');
+    Object.assign(d.style, {
+        position:'fixed', top:'50px', left:'50px', right:'50px',
+        background:'rgba(170,0,0,.92)', color:'#fff',
+        padding:'12px 16px', borderRadius:'10px',
+        fontFamily:'monospace', fontSize:'13px',
+        zIndex:'9999', boxShadow:'0 4px 20px rgba(0,0,0,.8)',
+    });
+    d.innerHTML = `<b>Erreur JS</b><br>${ev.message}<br><small>${ev.filename}:${ev.lineno}</small>
+        <br><button onclick="this.parentNode.remove()" style="margin-top:8px;padding:4px 12px;cursor:pointer;background:#fff;color:#900;border:none;border-radius:4px;font-weight:bold">✕</button>`;
+    document.body.appendChild(d);
+});
+</script>
+
+<!-- main.js chargé statiquement pour que l'importmap soit prêt (es-module-shims) -->
+<script type="module" src="src/main.js"></script>
+
 </body>
 </html>

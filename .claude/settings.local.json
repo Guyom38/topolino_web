@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(grep -E \"\\\\.\\(html|js|bat|py\\)$\")"
+      "Bash(grep -E \"\\\\.\\(html|js|bat|py\\)$\")",
+      "Bash(find \"C:\\\\Users\\\\Guillaume\\\\Documents\\\\#Projets\\\\#WEB\\\\Topolino\" -type f -exec ls -lh \"{}\")",
+      "Bash(sort -k2)",
+      "WebSearch"
     ]
   }
 }

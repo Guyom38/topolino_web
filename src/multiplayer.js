@@ -57,8 +57,8 @@ export function pollGamepads() {
 
         p.keys.left  = ax < -DZ || gp.buttons[14]?.pressed;
         p.keys.right = ax >  DZ || gp.buttons[15]?.pressed;
-        p.keys.up    = ay < -DZ || gp.buttons[12]?.pressed || gp.buttons[0]?.pressed; // A ou Croix
-        p.keys.down  = ay >  DZ || gp.buttons[13]?.pressed || gp.buttons[1]?.pressed; // B ou Rond
+        p.keys.up    = ay < -DZ || gp.buttons[12]?.pressed || gp.buttons[0]?.pressed || gp.buttons[7]?.pressed; // A, Croix ou R2
+        p.keys.down  = ay >  DZ || gp.buttons[13]?.pressed || gp.buttons[1]?.pressed || gp.buttons[6]?.pressed; // B, Rond ou L2
         p.keys.handbrake = gp.buttons[2]?.pressed || gp.buttons[3]?.pressed || gp.buttons[5]?.pressed; // X, Y ou R1
         
         // Stocker la valeur analogique brute pour le braquage fluide
@@ -68,19 +68,39 @@ export function pollGamepads() {
 
 // ── Initialisation ───────────────────────────────────────────────────────────
 
+// Charge et fait apparaître la voiture du joueur clavier (déclenché au 1er appui)
+let _localCarSpawned = false;
+async function _spawnLocalCar() {
+    if (_localCarSpawned) return;
+    _localCarSpawned = true;
+    await loadCarForPlayer(localPlayer);
+    localPlayer.respawn(0, 30, 0);
+    localPlayer.tracks = createTrackSystem();
+    localPlayer.shadow = createShadow();
+    localPlayer.aura   = createAura();
+    localPlayer.setLuggage(true);
+}
+
+const MOVEMENT_KEYS = new Set([
+    'ArrowUp','ArrowDown','ArrowLeft','ArrowRight',
+    'KeyW','KeyS','KeyA','KeyD','KeyZ','KeyQ','Space'
+]);
+
 export async function initMultiplayer() {
-    // Joueur local (clavier)
+    _localCarSpawned = false;
+    // Joueur local (clavier) — la voiture n'apparaît qu'au premier appui sur une touche
     localPlayer = new PlayerCar(LOCAL_ID, 'Joueur 1', '#B7D1C4', true);
     localPlayer.keys = localKeys;   // référence directe aux touches clavier
     players.set(LOCAL_ID, localPlayer);
 
-    await loadCarForPlayer(localPlayer);
-    localPlayer.respawn(0, 30, 0); // Apparition en hauteur
-    localPlayer.tracks = createTrackSystem();
-    localPlayer.shadow = createShadow();
-    localPlayer.aura   = createAura();
-    // Le premier joueur (local) commence avec le bagage
-    localPlayer.setLuggage(true);
+    // Spawn différé : premier appui clavier déclenche le chargement de la voiture
+    const _onFirstKey = (e) => {
+        if (!MOVEMENT_KEYS.has(e.code)) return;
+        document.removeEventListener('keydown', _onFirstKey);
+        _spawnLocalCar();
+    };
+    document.addEventListener('keydown', _onFirstKey);
+
     // Pas de label de nom pour le joueur local (caméra le suit)
 
     _connectToServer();
