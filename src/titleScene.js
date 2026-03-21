@@ -44,12 +44,13 @@ const POLICE_SPEED_MULT = 1.6; // police roule 1.6× plus vite
 const BOT_LANE = 1.54;                        // voies 30% plus étroites
 const BOT_Y2 = ROAD_BOT_Z - BOT_LANE;        // parking (côté herbe)
 const BOT_Y3 = ROAD_BOT_Z + BOT_LANE;        // circulation
-const PARK_SPOTS = [
-    { x: -22, z: BOT_Y2 },
-    { x:   2, z: BOT_Y2 },
-    { x:  26, z: BOT_Y2 },
-];
-const PARK_DURATION = 10000; // 10 secondes de pause
+const PARK_SPOTS = (function() {
+    const spots = [];
+    for (let x = -60; x <= 60; x += 11) spots.push({ x, z: BOT_Y2 });
+    return spots;
+})();
+const PARK_DURATION_MIN = 10000; // 10s minimum
+const PARK_DURATION_MAX = 30000; // 30s maximum
 const PARK_APPROACH = 15;    // distance pour repérer une place
 const PARK_SNAP     = 1.5;   // distance de snap pour se garer
 
@@ -263,7 +264,8 @@ function _buildCar(fbxTemplate, color, isPolice = false) {
 
     clone.traverse(child => {
         if (!child.isMesh) return;
-        child.castShadow = child.receiveShadow = false;
+        child.castShadow    = true;
+        child.receiveShadow = false;
         const policeMat = isPolice ? getPoliceMaterialForMesh(child.name) : null;
         const mat = policeMat ?? getMaterialForMesh(child.name);
         if (DEBUG_OBB) {
@@ -370,6 +372,7 @@ function _createGrass() {
     _grassMesh = new THREE.Mesh(geo, mat);
     _grassMesh.rotation.x = -Math.PI / 2;
     _grassMesh.position.y = -0.04;
+    _grassMesh.receiveShadow = true;
     _scene.add(_grassMesh);
 }
 
@@ -456,7 +459,7 @@ function _createRoadTexture(seed, withParking = false) {
         const ROAD_LEN = 140;
         const parkTop  = SIDEWALK + 6;          // bord haut de la zone parking
         const parkBot  = centerY - 6;           // bord bas (avant ligne centrale)
-        const spotLen  = 110;                   // longueur d'une place (×2)
+        const spotLen  = 130;                   // largeur d'une baie en pixels
         ctx.strokeStyle = 'rgba(255,255,255,0.85)';
         ctx.lineWidth   = 3;
         for (const sp of PARK_SPOTS) {
@@ -468,7 +471,7 @@ function _createRoadTexture(seed, withParking = false) {
             ctx.translate(px, (parkTop + parkBot) / 2);
             ctx.rotate(-Math.PI / 2);
             ctx.fillStyle = 'rgba(255,255,255,0.35)';
-            ctx.font = 'bold 28px Arial';
+            ctx.font = 'bold 58px Arial';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText('P', 0, 0);
@@ -498,6 +501,7 @@ function _createRoads() {
     const road1 = new THREE.Mesh(geo1, mat1);
     road1.rotation.x = -Math.PI / 2;
     road1.position.set(0, -0.02, ROAD_TOP_Z);
+    road1.receiveShadow = true;
     _scene.add(road1);
     _roadMeshes.push(road1);
 
@@ -508,6 +512,7 @@ function _createRoads() {
     const road2 = new THREE.Mesh(geo2, mat2);
     road2.rotation.x = -Math.PI / 2;
     road2.position.set(0, -0.02, ROAD_BOT_Z);
+    road2.receiveShadow = true;
     _scene.add(road2);
     _roadMeshes.push(road2);
 }
@@ -521,6 +526,8 @@ export async function initTitleScene() {
 
     // Renderer partagé avec le jeu — pas de second contexte WebGL
     renderer.domElement.style.display = 'block';
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
 
     // Rendre le fond du titre transparent pour laisser le canvas Three.js visible à travers
     const titleEl = document.getElementById('title-screen');
@@ -532,10 +539,24 @@ export async function initTitleScene() {
     _camera.position.set(0, 12, 10);
     _camera.lookAt(0, 0, 0);
 
-    _scene.add(new THREE.AmbientLight(0x7799cc, 0.8));
+    _scene.add(new THREE.AmbientLight(0x7799cc, 0.6));
+
+    // Soleil venant d'en bas (Z+, faible hauteur) → ombres vers le haut de l'écran
     const sun = new THREE.DirectionalLight(0xfff0cc, 1.9);
-    sun.position.set(30, 50, 20);  _scene.add(sun);
-    const fill = new THREE.DirectionalLight(0x334488, 0.4);
+    sun.position.set(10, 28, 40);   // vient du bas de l'écran, légèrement à droite
+    sun.castShadow = true;
+    sun.shadow.mapSize.width  = 2048;
+    sun.shadow.mapSize.height = 2048;
+    sun.shadow.camera.near   = 1;
+    sun.shadow.camera.far    = 120;
+    sun.shadow.camera.left   = -80;
+    sun.shadow.camera.right  =  80;
+    sun.shadow.camera.top    =  40;
+    sun.shadow.camera.bottom = -40;
+    sun.shadow.bias = -0.001;
+    _scene.add(sun);
+
+    const fill = new THREE.DirectionalLight(0x334488, 0.35);
     fill.position.set(-20, 8, -15); _scene.add(fill);
 
     _createGrass();
@@ -568,6 +589,12 @@ export async function initTitleScene() {
         const mainZ     = road === 0 ? ROAD_TOP_Z + LANE_OFFSET : BOT_Y3;  // Y3 pour le bas
         const overtakeZ = road === 0 ? ROAD_TOP_Z - LANE_OFFSET : BOT_Y2; // Y2 (parking) pour le bas
 
+        // Pré-garer 3 voitures civiles du bas sur des spots répartis (0, 4, 8)
+        const botIdx    = road === 1 ? i - CARS_TOP : -1;
+        const PRE_SPOTS = [0, 4, 8];
+        const preSpotIdx = PRE_SPOTS.indexOf(botIdx);
+        const preParked  = road === 1 && !isPolice && preSpotIdx !== -1;
+
         const c = {
             root, x: 0, z: 0, vx: 0, vz: 0, angle: 0, baseSpeed: 0.05, girophare,
             isPolice, road, dir, mainZ, overtakeZ,
@@ -575,12 +602,28 @@ export async function initTitleScene() {
             // Parking (route du bas uniquement)
             parkState: null,   // null | 'braking' | 'entering' | 'parked' | 'leaving'
             parkSpot: null,    // index dans PARK_SPOTS
-            parkTimer: 0,      // timestamp de début de parking
+            parkTimer: 0,
+            parkDuration: 0,
         };
         _cars.push(c);
         const idx   = road === 0 ? i : i - CARS_TOP;
         const total = road === 0 ? CARS_TOP : CARS_BOT;
         _spawnOnRoad(c, idx, total);
+
+        // Placer directement sur la place de parking avec un timer aléatoire déjà entamé
+        if (preParked) {
+            const sp = PARK_SPOTS[PRE_SPOTS[preSpotIdx]];
+            c.x         = sp.x;
+            c.z         = sp.z;
+            c.vx        = 0; c.vz = 0;
+            c.parkState    = 'parked';
+            c.parkSpot     = PRE_SPOTS[preSpotIdx];
+            c.parkDuration = PARK_DURATION_MIN + Math.random() * (PARK_DURATION_MAX - PARK_DURATION_MIN);
+            c.parkTimer    = performance.now() - Math.random() * c.parkDuration; // timer déjà en cours
+            c.angle        = Math.PI; // face à gauche
+            c.root.position.set(c.x, 0, c.z);
+            c.root.rotation.y = c.angle;
+        }
     }
 
     // ── Clavier ──────────────────────────────────────────────────────────────
@@ -738,14 +781,15 @@ function _loop() {
                         c.x = spot.x;
                         c.z = spot.z;
                         c.vx = 0; c.vz = 0;
-                        c.parkState = 'parked';
-                        c.parkTimer = now;
+                        c.parkState    = 'parked';
+                        c.parkDuration = PARK_DURATION_MIN + Math.random() * (PARK_DURATION_MAX - PARK_DURATION_MIN);
+                        c.parkTimer    = now;
                         c.angle = c.dir > 0 ? 0 : Math.PI;
                     }
                 } else if (c.parkState === 'parked') {
                     // ── Phase 3 : garée, attendre 10s ────────────────────────
                     c.vx = 0; c.vz = 0;
-                    if (now - c.parkTimer > PARK_DURATION) {
+                    if (now - c.parkTimer > c.parkDuration) {
                         c.parkState = 'leaving';
                     }
                 } else if (c.parkState === 'leaving') {
@@ -927,6 +971,7 @@ export function disposeTitleScene() {
     _roadMeshes = [];
 
     // Ne pas disposer le renderer — il est partagé avec le jeu
+    renderer.shadowMap.enabled = false;
     renderer.domElement.style.display = 'none'; // caché jusqu'au démarrage du jeu
     _scene = _camera = null;
     _cars  = [];
