@@ -10,6 +10,9 @@ const BODY_COLORS = [
     0xffffff, 0x222222,
 ];
 
+// ── Debug ─────────────────────────────────────────────────────────────────────
+const DEBUG_OBB = false;
+
 // ── Paramètres scène ──────────────────────────────────────────────────────────
 const CAR_COUNT  = 60;
 const ARENA_R    = 30;
@@ -144,7 +147,7 @@ function _respawn(c, initial) {
 
 function _buildCar(fbxTemplate, color) {
     const clone = fbxTemplate.clone(true);
-    clone.rotation.y = Math.PI * 1.5; // pointe vers +X du root (convention angle=0)
+    clone.rotation.y = Math.PI;
     clone.scale.setScalar(0.015);
 
     const box = new THREE.Box3().setFromObject(clone);
@@ -158,11 +161,41 @@ function _buildCar(fbxTemplate, color) {
         if (!child.isMesh) return;
         child.castShadow = child.receiveShadow = false;
         const mat = getMaterialForMesh(child.name);
-        child.material = mat ?? new THREE.MeshStandardMaterial({ color, roughness: 0.35, metalness: 0.12 });
+        // En mode debug : cloner le matériau pour rendre la voiture transparente
+        if (DEBUG_OBB) {
+            const base = mat ?? new THREE.MeshStandardMaterial({ color, roughness: 0.35, metalness: 0.12 });
+            child.material = base.clone();
+            child.material.transparent = true;
+            child.material.opacity     = 0.40;
+        } else {
+            child.material = mat ?? new THREE.MeshStandardMaterial({ color, roughness: 0.35, metalness: 0.12 });
+        }
         if (child.name.toLowerCase().includes('bagage')) child.visible = false;
     });
 
     return clone;
+}
+
+/** Ajoute un quad OBB coloré + contour au groupe de la voiture (debug uniquement) */
+function _addDebugOBB(root, color) {
+    // Quad plat (XZ) aux dimensions exactes de la hitbox
+    const geo  = new THREE.PlaneGeometry(CAR_HL * 2, CAR_HW * 2);
+    const fill = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+        color, transparent: true, opacity: 0.45,
+        side: THREE.DoubleSide, depthTest: false,
+    }));
+    fill.rotation.x = -Math.PI / 2;
+    fill.position.y = 0.04;
+    root.add(fill);
+
+    // Contour blanc pour délimiter la boîte nettement
+    const outline = new THREE.LineSegments(
+        new THREE.EdgesGeometry(geo),
+        new THREE.LineBasicMaterial({ color: 0xffffff, depthTest: false })
+    );
+    outline.rotation.x = -Math.PI / 2;
+    outline.position.y = 0.05;
+    root.add(outline);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -199,8 +232,10 @@ export async function initTitleScene() {
     } catch (e) { console.warn('[TitleScene] FBX non chargé:', e); return; }
 
     for (let i = 0; i < CAR_COUNT; i++) {
-        const root = new THREE.Group();
-        root.add(_buildCar(fbxTemplate, BODY_COLORS[i % BODY_COLORS.length]));
+        const color = BODY_COLORS[i % BODY_COLORS.length];
+        const root  = new THREE.Group();
+        root.add(_buildCar(fbxTemplate, color));
+        if (DEBUG_OBB) _addDebugOBB(root, color);
         _scene.add(root);
         const c = { root, x: 0, z: 0, vx: 0, vz: 0, angle: 0, baseSpeed: 0.05 };
         _cars.push(c);
