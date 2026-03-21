@@ -187,6 +187,7 @@
             padding:8px 18px; font-size:12px; font-weight:700;
             cursor:pointer; pointer-events:auto; backdrop-filter:blur(8px);
             transition:all .15s; letter-spacing:.1em; text-transform:uppercase;
+            z-index:95; /* toujours au-dessus de l'overlay d'attente (z-index:80) */
         }
         #back-btn:hover { background:rgba(255,200,0,.15); color:#ffcc00; border-color:rgba(255,200,0,.4); }
 
@@ -378,7 +379,12 @@ function _showTitle() {
     };
     setTimeout(() => {
         armed = true;
-        document.addEventListener('keydown', e => { _playTick(); go_(); }, { once: true });
+        const _onTitleKey = (e) => {
+            if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','KeyA','KeyD','KeyW','KeyS'].includes(e.code)) return;
+            document.removeEventListener('keydown', _onTitleKey);
+            _playTick(); go_();
+        };
+        document.addEventListener('keydown', _onTitleKey);
         el.addEventListener('click', () => { _playTick(); go_(); }, { once: true });
     }, 700);
 }

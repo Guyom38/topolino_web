@@ -76,6 +76,72 @@ const vertMeshes = new Set([
     'italie_vert', 'italie_vert_001',
 ]);
 
+// ── Matériaux police ──────────────────────────────────────────────────────────
+export const POLICE_COLOR = '#6BAABB';   // bleu cyan légèrement gris
+
+export const policeMaterials = {
+    stripeRed:  new THREE.MeshStandardMaterial({ color: 0xCC1111, roughness: 0.35, metalness: 0.10, emissive: new THREE.Color(0x220000) }),
+    stripeBlue: new THREE.MeshStandardMaterial({ color: 0x1155DD, roughness: 0.35, metalness: 0.10, emissive: new THREE.Color(0x000022) }),
+};
+
+// Lazy-init : créés une seule fois au premier appel
+let _policeDoorMat = null;
+export function getPoliceDoorMaterial() {
+    if (_policeDoorMat) return _policeDoorMat;
+    const W = 512, H = 128;
+    const c = document.createElement('canvas');
+    c.width = W; c.height = H;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = POLICE_COLOR;
+    ctx.fillRect(0, 0, W, H);
+    // Ombre portée pour l'épaisseur
+    ctx.font = 'bold 90px "Arial Black", Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.strokeStyle = 'rgba(0,30,60,0.55)';
+    ctx.lineWidth = 12;
+    ctx.lineJoin = 'round';
+    ctx.strokeText('POLICE', W / 2, H / 2);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillText('POLICE', W / 2, H / 2);
+    _policeDoorMat = new THREE.MeshStandardMaterial({
+        map: new THREE.CanvasTexture(c), roughness: 0.35, metalness: 0.10,
+    });
+    return _policeDoorMat;
+}
+
+let _policeRoofMat = null;
+export function getPoliceRoofMaterial() {
+    if (_policeRoofMat) return _policeRoofMat;
+    const W = 512, H = 256;
+    const c = document.createElement('canvas');
+    c.width = W; c.height = H;
+    const ctx = c.getContext('2d');
+    // Rectangle blanc central
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(108, 90, 296, 76);
+    // Carré rouge gauche
+    ctx.fillStyle = '#DD1111';
+    ctx.fillRect(0, 68, 116, 120);
+    // Carré bleu droit
+    ctx.fillStyle = '#1155DD';
+    ctx.fillRect(396, 68, 116, 120);
+    _policeRoofMat = new THREE.MeshStandardMaterial({
+        map: new THREE.CanvasTexture(c),
+        roughness: 0.30, metalness: 0.05,
+        transparent: true, depthWrite: false,
+    });
+    return _policeRoofMat;
+}
+
+export function getPoliceMaterialForMesh(name) {
+    const n = name.toLowerCase();
+    if (n === 'x_carrosserie_laterale_arriere') return policeMaterials.stripeRed;
+    if (n === 'x_carrosserie_laterale_avant')   return policeMaterials.stripeBlue;
+    // Portes et toit : gérés en décals 3D dans addGirophare (indépendants des UV)
+    return null;
+}
+
 /**
  * Renvoie le matériau pour un mesh donné, ou null → appliquer carColor par défaut.
  * Retournent null (couleur joueur) : x_carrosserie_*, x_portiere_*, logo_*_topolino, serrure_*

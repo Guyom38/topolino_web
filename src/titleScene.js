@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
-import { getMaterialForMesh } from './materials.js';
+import { getMaterialForMesh, getPoliceMaterialForMesh, POLICE_COLOR } from './materials.js';
+import { addGirophare } from './car.js';
 import { renderer } from './scene.js';
 
 // ── Couleurs carrosserie ──────────────────────────────────────────────────────
@@ -35,6 +36,17 @@ let _camera   = null;
 let _cars     = [];
 let _running  = false;
 let _animId   = null;
+
+// ── Contrôle joueurs sur la page de titre ────────────────────────────────────
+const _titlePlayerCars = new Map(); // id → { c, sprite, keys }
+const _TITLE_MOVE_KEYS = new Set(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','KeyA','KeyD','KeyW','KeyS']);
+const _titleKbState    = { left: false, right: false, up: false, down: false };
+let   _kbClaimed       = false;
+let   _titleOnKeyDown  = null;
+let   _titleOnKeyUp    = null;
+let   _titleSock       = null;
+const _gpClaimed       = new Set();
+const _TITLE_COLORS    = ['#B7D1C4','#ff6b1c','#4499ff','#cc44ff','#ffcc00','#ff3344','#44dd88','#ffaa44'];
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  SAT – Séparation d'axe pour deux OBB 2D (plan XZ)
@@ -128,6 +140,52 @@ function _resolveAll() {
 //  Gestion des voitures
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// ── Helpers joueurs titre ─────────────────────────────────────────────────────
+
+function _nextPlayerColor() {
+    return _TITLE_COLORS[_titlePlayerCars.size % _TITLE_COLORS.length];
+}
+
+function _getFreeCar() {
+    const claimed = new Set([..._titlePlayerCars.values()].map(v => v.c));
+    return _cars.find(c => !claimed.has(c)) ?? null;
+}
+
+function _createNameSprite(text, color) {
+    const W = 256, H = 64;
+    const cv = document.createElement('canvas');
+    cv.width = W; cv.height = H;
+    const ctx = cv.getContext('2d');
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(4, 4, W - 8, H - 8);
+    ctx.font = 'bold 34px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = color;
+    ctx.fillText(text.slice(0, 14), W / 2, H / 2 + 2);
+    const tex    = new THREE.CanvasTexture(cv);
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false }));
+    sprite.scale.set(4.0, 1.0, 1.0);
+    if (_scene) _scene.add(sprite);
+    return sprite;
+}
+
+function _claimCar(id, name, color, keys) {
+    if (_titlePlayerCars.has(id) || !_scene) return;
+    const c = _getFreeCar();
+    if (!c) return;
+    c.root.scale.setScalar(2.0);
+    const sprite = _createNameSprite(name, color);
+    _titlePlayerCars.set(id, { c, sprite, keys });
+}
+
+function _getPlayerEntry(c) {
+    for (const v of _titlePlayerCars.values()) {
+        if (v.c === c) return v;
+    }
+    return null;
+}
+
 function _respawn(c, initial) {
     const ea = Math.random() * Math.PI * 2;
     const r  = initial ? Math.random() * SPAWN_R : SPAWN_R;
@@ -145,7 +203,7 @@ function _respawn(c, initial) {
     c.vz = -Math.sin(toward) * c.baseSpeed;
 }
 
-function _buildCar(fbxTemplate, color) {
+function _buildCar(fbxTemplate, color, isPolice = false) {
     const clone = fbxTemplate.clone(true);
     clone.rotation.y = Math.PI;
     clone.scale.setScalar(0.015);
@@ -160,8 +218,8 @@ function _buildCar(fbxTemplate, color) {
     clone.traverse(child => {
         if (!child.isMesh) return;
         child.castShadow = child.receiveShadow = false;
-        const mat = getMaterialForMesh(child.name);
-        // En mode debug : cloner le matériau pour rendre la voiture transparente
+        const policeMat = isPolice ? getPoliceMaterialForMesh(child.name) : null;
+        const mat = policeMat ?? getMaterialForMesh(child.name);
         if (DEBUG_OBB) {
             const base = mat ?? new THREE.MeshStandardMaterial({ color, roughness: 0.35, metalness: 0.12 });
             child.material = base.clone();
@@ -174,6 +232,12 @@ function _buildCar(fbxTemplate, color) {
     });
 
     return clone;
+}
+
+// _buildGirophare délègue à addGirophare de car.js (même code, même rendu)
+// Le root du titre joue le rôle de carVisual
+function _buildGirophare(parent) {
+    return addGirophare(parent);
 }
 
 /** Ajoute un quad OBB coloré + contour au groupe de la voiture (debug uniquement) */
@@ -231,15 +295,59 @@ export async function initTitleScene() {
         );
     } catch (e) { console.warn('[TitleScene] FBX non chargé:', e); return; }
 
+    const policeColor = parseInt(POLICE_COLOR.replace('#', ''), 16);
+
     for (let i = 0; i < CAR_COUNT; i++) {
-        const color = BODY_COLORS[i % BODY_COLORS.length];
-        const root  = new THREE.Group();
-        root.add(_buildCar(fbxTemplate, color));
+        // ~1 voiture sur 7 est une voiture de police
+        const isPolice = (i % 7 === 0);
+        const color    = isPolice ? policeColor : BODY_COLORS[i % BODY_COLORS.length];
+        const root     = new THREE.Group();
+        root.add(_buildCar(fbxTemplate, color, isPolice));
         if (DEBUG_OBB) _addDebugOBB(root, color);
         _scene.add(root);
-        const c = { root, x: 0, z: 0, vx: 0, vz: 0, angle: 0, baseSpeed: 0.05 };
+
+        let girophare = null;
+        if (isPolice) girophare = _buildGirophare(root);
+
+        const c = { root, x: 0, z: 0, vx: 0, vz: 0, angle: 0, baseSpeed: 0.05, girophare };
         _cars.push(c);
         _respawn(c, true);
+    }
+
+    // ── Clavier ──────────────────────────────────────────────────────────────
+    _titleOnKeyDown = (e) => {
+        if (!_TITLE_MOVE_KEYS.has(e.code)) return;
+        if (!_kbClaimed) {
+            _kbClaimed = true;
+            _claimCar('kb', 'Joueur 1', _nextPlayerColor(), _titleKbState);
+        }
+        if (e.code === 'ArrowLeft'  || e.code === 'KeyA') _titleKbState.left  = true;
+        if (e.code === 'ArrowRight' || e.code === 'KeyD') _titleKbState.right = true;
+        if (e.code === 'ArrowUp'    || e.code === 'KeyW') _titleKbState.up    = true;
+        if (e.code === 'ArrowDown'  || e.code === 'KeyS') _titleKbState.down  = true;
+    };
+    _titleOnKeyUp = (e) => {
+        if (e.code === 'ArrowLeft'  || e.code === 'KeyA') _titleKbState.left  = false;
+        if (e.code === 'ArrowRight' || e.code === 'KeyD') _titleKbState.right = false;
+        if (e.code === 'ArrowUp'    || e.code === 'KeyW') _titleKbState.up    = false;
+        if (e.code === 'ArrowDown'  || e.code === 'KeyS') _titleKbState.down  = false;
+    };
+    document.addEventListener('keydown', _titleOnKeyDown);
+    document.addEventListener('keyup',   _titleOnKeyUp);
+
+    // ── Smartphone via socket.io ──────────────────────────────────────────────
+    if (typeof io !== 'undefined') {
+        _titleSock = io(window.location.origin);
+        _titleSock.on('player_joined', (data) => {
+            if (_titlePlayerCars.has(data.id)) return;
+            const keys = { left: false, right: false, up: false, down: false };
+            _claimCar(data.id, data.name || `Joueur ${_titlePlayerCars.size + 1}`,
+                      data.color || _nextPlayerColor(), keys);
+        });
+        _titleSock.on('player_input', (data) => {
+            const entry = _titlePlayerCars.get(data.id);
+            if (entry) Object.assign(entry.keys, data);
+        });
     }
 
     _running = true;
@@ -257,12 +365,47 @@ function _loop() {
     if (!_running) return;
     _animId = requestAnimationFrame(_loop);
 
+    // ── Sondage manettes ─────────────────────────────────────────────────────
+    if (navigator.getGamepads) {
+        for (const gp of navigator.getGamepads()) {
+            if (!gp) continue;
+            const idx = gp.index;
+            if (!_gpClaimed.has(idx) && gp.buttons.some(b => b.pressed)) {
+                _gpClaimed.add(idx);
+                const col    = _nextPlayerColor();
+                const gpKeys = { left: false, right: false, up: false, down: false };
+                _claimCar(`gp_${idx}`, `Joueur ${_titlePlayerCars.size + 1}`, col, gpKeys);
+            }
+            const entry = _titlePlayerCars.get(`gp_${idx}`);
+            if (entry) {
+                const ax0 = gp.axes[0] ?? 0;
+                entry.keys.left  = ax0 < -0.3;
+                entry.keys.right = ax0 >  0.3;
+                entry.keys.up    = (gp.buttons[7]?.value ?? 0) > 0.1 || (gp.axes[3] ?? 0) < -0.3;
+                entry.keys.down  = (gp.buttons[6]?.value ?? 0) > 0.1;
+            }
+        }
+    }
+
     for (const c of _cars) {
-        // ── Poussée vers la vitesse cible ────────────────────────────────
-        const sp = Math.hypot(c.vx, c.vz);
-        if (sp < c.baseSpeed) {
-            c.vx += Math.cos(c.angle) * THRUST;
-            c.vz += -Math.sin(c.angle) * THRUST;
+        const pe = _getPlayerEntry(c);
+
+        if (pe) {
+            // ── Conduite joueur ───────────────────────────────────────────
+            if (pe.keys.left)  c.angle += 0.055;
+            if (pe.keys.right) c.angle -= 0.055;
+            if (pe.keys.up) {
+                c.vx += Math.cos(c.angle) * 0.0045;
+                c.vz += -Math.sin(c.angle) * 0.0045;
+            }
+            if (pe.keys.down) { c.vx *= 0.86; c.vz *= 0.86; }
+        } else {
+            // ── IA : poussée vers la vitesse cible ────────────────────────
+            const sp = Math.hypot(c.vx, c.vz);
+            if (sp < c.baseSpeed) {
+                c.vx += Math.cos(c.angle) * THRUST;
+                c.vz += -Math.sin(c.angle) * THRUST;
+            }
         }
 
         // ── Frottement sol ───────────────────────────────────────────────
@@ -273,14 +416,16 @@ function _loop() {
         c.x += c.vx;
         c.z += c.vz;
 
-        // ── Braquage progressif : l'angle suit la vélocité ───────────────
-        const sp2 = Math.hypot(c.vx, c.vz);
-        if (sp2 > MIN_SPEED * 0.4) {
-            const target = Math.atan2(-c.vz, c.vx);
-            let da = target - c.angle;
-            while (da >  Math.PI) da -= 2 * Math.PI;
-            while (da < -Math.PI) da += 2 * Math.PI;
-            c.angle += da * STEER_RATE;
+        if (!pe) {
+            // ── Braquage progressif IA ────────────────────────────────────
+            const sp2 = Math.hypot(c.vx, c.vz);
+            if (sp2 > MIN_SPEED * 0.4) {
+                const target = Math.atan2(-c.vz, c.vx);
+                let da = target - c.angle;
+                while (da >  Math.PI) da -= 2 * Math.PI;
+                while (da < -Math.PI) da += 2 * Math.PI;
+                c.angle += da * STEER_RATE;
+            }
         }
 
         // ── Sync 3D ──────────────────────────────────────────────────────
@@ -288,16 +433,23 @@ function _loop() {
         c.root.position.z = c.z;
         c.root.rotation.y = c.angle;
 
-        // ── Sortie d'arène ───────────────────────────────────────────────
-        if (Math.hypot(c.x, c.z) > ARENA_R) _respawn(c, false);
+        // ── Sortie d'arène (IA seulement) ────────────────────────────────
+        if (!pe && Math.hypot(c.x, c.z) > ARENA_R) _respawn(c, false);
     }
 
     // ── Collisions OBB ───────────────────────────────────────────────────
     _resolveAll();
     // Re-sync positions après séparation SAT
+    const now = performance.now();
     for (const c of _cars) {
         c.root.position.x = c.x;
         c.root.position.z = c.z;
+        if (c.girophare) c.girophare.update(now);
+    }
+
+    // ── Mise à jour sprites pseudo joueurs ───────────────────────────────────
+    for (const { c, sprite } of _titlePlayerCars.values()) {
+        sprite.position.set(c.x, 3.8, c.z);
     }
 
     renderer.render(_scene, _camera);
@@ -307,6 +459,24 @@ export function disposeTitleScene() {
     _running = false;
     if (_animId) { cancelAnimationFrame(_animId); _animId = null; }
     window.removeEventListener('resize', _onResize);
+
+    // Nettoyer écouteurs clavier
+    if (_titleOnKeyDown) { document.removeEventListener('keydown', _titleOnKeyDown); _titleOnKeyDown = null; }
+    if (_titleOnKeyUp)   { document.removeEventListener('keyup',   _titleOnKeyUp);   _titleOnKeyUp   = null; }
+
+    // Nettoyer sprites joueurs
+    for (const { sprite } of _titlePlayerCars.values()) {
+        sprite.material.map?.dispose();
+        sprite.material.dispose();
+    }
+    _titlePlayerCars.clear();
+    _kbClaimed = false;
+    _gpClaimed.clear();
+    Object.assign(_titleKbState, { left: false, right: false, up: false, down: false });
+
+    // Déconnexion socket smartphone
+    if (_titleSock) { _titleSock.disconnect(); _titleSock = null; }
+
     // Ne pas disposer le renderer — il est partagé avec le jeu
     renderer.domElement.style.display = 'none'; // caché jusqu'au démarrage du jeu
     _scene = _camera = null;

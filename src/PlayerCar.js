@@ -45,6 +45,10 @@ export class PlayerCar {
         this.shadow = null;
         this.aura   = null;
 
+        // ── Variante police ───────────────────────────────────────────────────
+        this.isPolice  = false;
+        this.girophare = null;
+
         // ── Mode voleur de bagage ─────────────────────────────────────────────
         this.hasLuggage        = false;
         this.luggageMeshes     = []; // Rempli lors du loadCarForPlayer
@@ -193,8 +197,9 @@ export class PlayerCar {
             this._nameSprite.material.map.dispose();
             this._nameSprite.material.dispose();
         }
-        if (this.shadow) this.shadow.dispose();
-        if (this.tracks) this.tracks.dispose();
-        if (this.aura)   this.aura.dispose();
+        if (this.shadow)    this.shadow.dispose();
+        if (this.tracks)    this.tracks.dispose();
+        if (this.aura)      this.aura.dispose();
+        if (this.girophare) this.girophare.dispose();
     }
 }

@@ -10,13 +10,19 @@ const TRACKS = [
 let _audio = null;
 
 export function startMusic(volume = 0.55) {
-    if (_audio) return; // déjà lancée
-    const track = TRACKS[Math.floor(Math.random() * TRACKS.length)];
-    _audio = new Audio(track);
-    _audio.loop   = true;
-    _audio.volume = volume;
+    // Déjà en cours de lecture → rien à faire
+    if (_audio && !_audio.paused) return;
+
+    // Créer l'objet Audio une seule fois
+    if (!_audio) {
+        const track = TRACKS[Math.floor(Math.random() * TRACKS.length)];
+        _audio = new Audio(track);
+        _audio.loop   = true;
+        _audio.volume = volume;
+    }
+
     _audio.play().catch(() => {
-        // Fallback F5 / lien direct : le premier geste (touche ou clic) débloque
+        // Autoplay bloqué : relancer au premier geste utilisateur
         const resume = () => {
             _audio.play().catch(() => {});
             document.removeEventListener('pointerdown', resume);

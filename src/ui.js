@@ -44,10 +44,14 @@ function _updateFPS() {
 
 // ── Mise à jour HUD ──────────────────────────────────────────────────────────
 export function updateUI(players) {
+    const now = performance.now();
     _updateFPS();
     _updatePlayerCards(players);
     _updateCamDebug();
     _updateWaiting(players);
+    for (const p of players.values()) {
+        if (p.girophare) p.girophare.update(now);
+    }
 }
 
 function _updateWaiting(players) {

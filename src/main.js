@@ -15,6 +15,11 @@ import { initTitleScene, disposeTitleScene } from './titleScene.js';
 // ── Détection du mode ─────────────────────────────────────────────────────────
 const MODE = new URLSearchParams(window.location.search).get('mode');
 
+// Vrai dès qu'au moins une voiture est présente dans la partie
+function _anyCarReady() {
+    return Array.from(players.values()).some(p => p.car);
+}
+
 // ── Mode normal (conduite libre) ──────────────────────────────────────────────
 async function startDriveMode(shouldRun) {
     initUI();
@@ -86,7 +91,12 @@ async function startParkingMode(shouldRun) {
         const active = isParkingActive();
         for (const p of players.values()) {
             if (!p.car) continue;
-            if (active) updatePhysics(p, getParkingTerrainY(), () => 0);
+            if (active) {
+                updatePhysics(p, getParkingTerrainY(), () => 0);
+                p.carSpeed *= 0.90;                           // inertie réduite en parking
+                if (p.carSpeed >  0.26) p.carSpeed =  0.26;  // marche avant max parking
+                if (p.carSpeed < -0.12) p.carSpeed = -0.12;  // marche arrière max parking
+            }
             // Les voitures sont figées quand la partie est terminée
         }
 
@@ -101,8 +111,9 @@ async function startParkingMode(shouldRun) {
         }
 
         updateCamera(players);
-        updateParkingMode(players, now);
+        if (_anyCarReady()) updateParkingMode(players, now);
         updateSparks(now);
+        updateUI(players);
         renderer.render(scene, camera);
     }
 
@@ -211,7 +222,7 @@ async function startTronMode(shouldRun) {
         }
 
         // Pas de collisions inter-joueurs en Tron (les traces font office de murs)
-        updateTronMode(players, now);
+        if (_anyCarReady()) updateTronMode(players, now);
 
         for (const p of players.values()) {
             if (!p.car) continue;
@@ -250,7 +261,7 @@ async function startDerbyMode(shouldRun) {
             updateCollisions(players, [], 2.5);
         }
 
-        updateDerbyMode(players, now);
+        if (_anyCarReady()) updateDerbyMode(players, now);
 
         for (const p of players.values()) {
             if (!p.car) continue;
@@ -311,7 +322,7 @@ async function startBattleMode(shouldRun) {
             sun.target.updateMatrixWorld();
         }
 
-        updateBattleMode(players, now);
+        if (_anyCarReady()) updateBattleMode(players, now);
         updateSparks(now);
         updateUI(players);
         renderer.render(scene, camera);
@@ -341,7 +352,7 @@ async function startFootMode(shouldRun) {
         }
 
         updateCollisions(players);
-        updateFootMode(players, now);
+        if (_anyCarReady()) updateFootMode(players, now);
 
         for (const p of players.values()) {
             if (!p.car) continue;
@@ -391,7 +402,7 @@ async function startCircuitMode(shouldRun) {
             p.updateNameLabel();
         }
 
-        updateCircuitMode(players, now, dt);
+        if (_anyCarReady()) updateCircuitMode(players, now, dt);
         updateCircuitCamera(players);
         updateSparks(now);
         updateSmoke(now);
