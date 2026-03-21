@@ -75,6 +75,11 @@ export function updatePhysics(p, terrainY, getY = undefined) {
     p.car.rotation.y  = p.carAngle;
 
     // --- Physique verticale ---
+    // Mesurer la montée réelle du terrain depuis la frame précédente
+    const prevTerrainY = p._prevTerrainY ?? terrainY;
+    const terrainRise  = terrainY - prevTerrainY;  // > 0 = montée, < 0 = descente
+    p._prevTerrainY    = terrainY;
+
     p.verticalVelocity -= config.gravity;
     p.car.position.y   += p.verticalVelocity;
 
@@ -83,9 +88,15 @@ export function updatePhysics(p, terrainY, getY = undefined) {
     const isInside = !isChase || (Math.abs(p.car.position.x) <= limit && Math.abs(p.car.position.z) <= limit);
 
     if (isInside && p.car.position.y <= terrainY) {
-        p.car.position.y   = terrainY;
-        p.verticalVelocity = 0;
-        p.onGround         = true;
+        p.car.position.y = terrainY;
+        if (terrainRise > 0) {
+            // Montée : injecter la vitesse verticale réelle de la pente
+            // La voiture prend de l'élan et décolle naturellement au sommet
+            p.verticalVelocity = terrainRise;
+        } else {
+            p.verticalVelocity = 0;
+        }
+        p.onGround = true;
     } else {
         p.onGround = false;
     }

@@ -90,7 +90,7 @@ function _jumpBumpAt(x, z) {
             const r  = 9  + hash(cx * 7, cz * 7) * 5;    // rayon 9–14
             if (d >= r * 2.2) continue;
 
-            const bh = 3.2 + hash(cx * 5, cz * 9) * 2.2; // hauteur 3.2–5.4
+            const bh = 5.0 + hash(cx * 5, cz * 9) * 3.5; // hauteur 5–8.5
             const nt = Math.max(0, 1.0 - d / (r * 2.2));
             result  += bh * nt * nt * (3.0 - 2.0 * nt);  // smoothstep
         }

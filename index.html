@@ -152,7 +152,8 @@
         .sep { width:1px; height:48px; background:rgba(255,255,255,.1); }
 
         /* ═══ IN-GAME UI ═══ */
-        #game-ui { position:fixed; inset:0; pointer-events:none; z-index:90; }
+        #game-ui { position:fixed; inset:0; pointer-events:none; z-index:90; display:none; }
+        #game-ui.hidden { display:none; }
 
         #qr-wrap {
             position:absolute; top:10px; right:10px;
@@ -197,6 +198,36 @@
         }
 
         @keyframes parkingBlink { 0%,100%{opacity:1} 50%{opacity:0.15} }
+
+        /* ═══ WAITING OVERLAY ═══ */
+        #waiting-screen {
+            position: absolute; inset: 0;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center; gap: 24px;
+            background: rgba(0,0,0,0.72);
+            backdrop-filter: blur(6px);
+            z-index: 80; pointer-events: none;
+        }
+        #waiting-screen.hidden { display: none !important; }
+        #waiting-title {
+            font-size: clamp(18px, 3vw, 32px); font-weight: 900;
+            letter-spacing: .12em; text-transform: uppercase;
+            color: #ffcc00; text-shadow: 0 0 30px rgba(255,200,0,.6);
+            animation: blink 1.4s step-end infinite;
+        }
+        #waiting-qr-box {
+            background: #fff; border-radius: 16px; padding: 14px;
+            box-shadow: 0 0 60px rgba(255,200,0,.25), 0 8px 32px rgba(0,0,0,.6);
+        }
+        #waiting-qr { width: 240px; height: 240px; }
+        #waiting-url {
+            font-size: clamp(11px, 1.6vw, 15px); color: rgba(255,255,255,.6);
+            letter-spacing: .05em;
+        }
+        #waiting-hint {
+            font-size: clamp(10px, 1.3vw, 13px); color: rgba(255,255,255,.32);
+            letter-spacing: .12em; text-transform: uppercase;
+        }
     </style>
 </head>
 <body>
@@ -286,6 +317,16 @@
 
 <!-- ═══ IN-GAME UI ═══ -->
 <div id="game-ui" class="hidden">
+    <!-- Overlay "En attente de joueurs" -->
+    <div id="waiting-screen">
+        <div id="waiting-title">En attente de joueurs…</div>
+        <div id="waiting-qr-box">
+            <div id="waiting-qr"></div>
+        </div>
+        <div id="waiting-url">chargement…</div>
+        <div id="waiting-hint">📱 Scannez le QR code pour jouer sur mobile</div>
+    </div>
+
     <div id="qr-wrap">
         <div id="qr-hint">📱 Rejoindre</div>
         <div id="qr-canvas"></div>

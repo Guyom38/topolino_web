@@ -435,14 +435,16 @@ window._startGameMode = function(mode) {
     renderer.domElement.style.display = 'block';
     const lbl = document.getElementById('mode-label');
     if (lbl) lbl.textContent = LABELS_MAP[mode] || mode;
-    document.getElementById('game-ui')?.classList.remove('hidden');
+    const _gui = document.getElementById('game-ui');
+    if (_gui) { _gui.classList.remove('hidden'); _gui.style.display = 'block'; }
     _launchMode(mode);
 };
 
 // Démarrage direct (F5 / lien avec ?mode=xxx)
 if (MODE) {
     renderer.domElement.style.display = 'block';
-    document.getElementById('game-ui')?.classList.remove('hidden');
+    const _gui = document.getElementById('game-ui');
+    if (_gui) { _gui.classList.remove('hidden'); _gui.style.display = 'block'; }
     _launchMode(MODE);
 } else {
     // Page de titre → lancer les Topolino 3D en arrière-plan

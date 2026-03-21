@@ -13,12 +13,20 @@ export function initUI() {
 function _generateQR(url) {
     if (qrGenerated || typeof QRCode === 'undefined') return;
     qrGenerated = true;
+
+    // Petit QR en haut à droite
     const el = document.getElementById('qr-canvas');
-    if (!el) return;
-    new QRCode(el, { text: url, width: 80, height: 80,
+    if (el) new QRCode(el, { text: url, width: 80, height: 80,
         colorDark: '#000', colorLight: '#fff', correctLevel: QRCode.CorrectLevel.M });
     const lbl = document.getElementById('qr-label');
     if (lbl) lbl.textContent = url.replace(/^https?:\/\//, '');
+
+    // Grand QR dans l'overlay d'attente
+    const big = document.getElementById('waiting-qr');
+    if (big) new QRCode(big, { text: url, width: 240, height: 240,
+        colorDark: '#000', colorLight: '#fff', correctLevel: QRCode.CorrectLevel.M });
+    const wu = document.getElementById('waiting-url');
+    if (wu) wu.textContent = url.replace(/^https?:\/\//, '');
 }
 
 // ── FPS counter global ────────────────────────────────────────────────────────
@@ -39,6 +47,14 @@ export function updateUI(players) {
     _updateFPS();
     _updatePlayerCards(players);
     _updateCamDebug();
+    _updateWaiting(players);
+}
+
+function _updateWaiting(players) {
+    const overlay = document.getElementById('waiting-screen');
+    if (!overlay) return;
+    const hasAnyCar = Array.from(players.values()).some(p => p.car);
+    overlay.classList.toggle('hidden', hasAnyCar);
 }
 
 // ── Visages + scores ──────────────────────────────────────────────────────────
