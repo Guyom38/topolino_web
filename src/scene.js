@@ -10,10 +10,9 @@ export const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-// N'attacher le canvas que si un mode de jeu est actif (pas au menu)
-if (new URLSearchParams(window.location.search).get('mode')) {
-    document.body.appendChild(renderer.domElement);
-}
+// Canvas toujours présent dans le DOM, caché au menu puis visible en jeu
+Object.assign(renderer.domElement.style, { position: 'fixed', inset: '0', zIndex: '1', display: 'none' });
+document.body.appendChild(renderer.domElement);
 
 // Lumière ambiante
 scene.add(new THREE.AmbientLight(0xd0e8ff, 0.18));
@@ -24,14 +23,14 @@ sun.castShadow = true;
 sun.shadow.mapSize.width  = 2048;
 sun.shadow.mapSize.height = 2048;
 sun.shadow.camera.near = 1;
-sun.shadow.camera.far  = 500;
-sun.shadow.camera.left   = -150;
-sun.shadow.camera.right  =  150;
-sun.shadow.camera.top    =  150;
-sun.shadow.camera.bottom = -150;
-sun.shadow.bias = -0.0005;
-sun.shadow.normalBias = 0.02; // Aide à réduire le "shadow acne" sur le relief
-sun.position.set(100, 150, 100);
+sun.shadow.camera.far  = 1000;
+sun.shadow.camera.left   = -250;
+sun.shadow.camera.right  =  250;
+sun.shadow.camera.top    =  250;
+sun.shadow.camera.bottom = -250;
+sun.shadow.bias = -0.0002;
+sun.shadow.normalBias = 0.05; 
+sun.position.set(150, 200, 100);
 sun.target.position.set(0, 0, 0);
 scene.add(sun);
 scene.add(sun.target);

@@ -121,7 +121,7 @@ export function getSlopeGrip(x, z) {
 
 // --- Patches de terrain (3 recyclés) ---
 const PATCH_W = 400, PATCH_D = 300;
-const SEG_W   = 32,  SEG_D   = 40;
+const SEG_W   = 64,  SEG_D   = 80; // Doublé la résolution (64x80) pour plus de finesse
 
 const GR = 0.28, GG = 0.52, GB = 0.15; // vert (plat)
 const BR = 0.42, BG = 0.28, BB = 0.12; // marron (pentu)
@@ -219,9 +219,6 @@ const terrainMat = new THREE.MeshStandardMaterial({
 terrainMat.onBeforeCompile = shader => {
     shader.uniforms.uGrass = { value: _grassTex };
 
-    // Varying world-XZ basé sur la position locale du plan
-    // PlaneGeometry local : X=world X, Y=-world Z (avant rotation)
-    // → séamless si TILE divise PATCH_D/2 et PATCH_W/2 exactement
     shader.vertexShader = 'varying vec2 vGrassUV;\n' + shader.vertexShader.replace(
         '#include <begin_vertex>',
         `#include <begin_vertex>
@@ -233,8 +230,7 @@ terrainMat.onBeforeCompile = shader => {
         '#include <color_fragment>',
         `#include <color_fragment>
          float gn = texture2D(uGrass, vGrassUV).r;
-         // 0.6 + gn*0.8 → plage 0.6–1.4, centrée sur 1.0 quand gn=0.5
-         diffuseColor.rgb *= (0.60 + gn * 0.80);`
+         diffuseColor.rgb *= (0.65 + gn * 0.70);`
     );
 };
 
@@ -255,8 +251,11 @@ function recomputePatch(mesh) {
 
             // Calcul de la normale précise via getNormalAt
             const n = getNormalAt(wx, wz);
-            // On mappe les axes pour la rotation du plan (X=-PI/2)
-            norm.setXYZ(idx, n.x, n.z, n.y);
+            // On mappe les axes pour la rotation du plan (X=-PI/2) :
+            // Local X = World X
+            // Local Y = -World Z
+            // Local Z = World Y
+            norm.setXYZ(idx, n.x, -n.z, n.y);
 
             const t = THREE.MathUtils.clamp((0.97 - n.y) / 0.12, 0, 1);
             col.setXYZ(idx, GR + (BR - GR) * t, GG + (BG - GG) * t, GB + (BB - GB) * t);

@@ -70,6 +70,8 @@ export function pollGamepads() {
 
 // Charge et fait apparaître la voiture du joueur clavier (déclenché au 1er appui)
 let _localCarSpawned = false;
+let _onFirstKeyRef   = null;
+
 async function _spawnLocalCar() {
     if (_localCarSpawned) return;
     _localCarSpawned = true;
@@ -87,21 +89,32 @@ const MOVEMENT_KEYS = new Set([
 ]);
 
 export async function initMultiplayer() {
+    // Supprimer l'ancien listener de spawn différé s'il n'a pas encore tiré
+    if (_onFirstKeyRef) {
+        document.removeEventListener('keydown', _onFirstKeyRef);
+        _onFirstKeyRef = null;
+    }
+
+    // Nettoyer tous les joueurs de l'ancienne session (évite les doublons de voitures)
+    for (const p of players.values()) p.dispose();
+    players.clear();
+    gamepadPlayers.clear();
+
     _localCarSpawned = false;
+
     // Joueur local (clavier) — la voiture n'apparaît qu'au premier appui sur une touche
     localPlayer = new PlayerCar(LOCAL_ID, 'Joueur 1', '#B7D1C4', true);
     localPlayer.keys = localKeys;   // référence directe aux touches clavier
     players.set(LOCAL_ID, localPlayer);
 
     // Spawn différé : premier appui clavier déclenche le chargement de la voiture
-    const _onFirstKey = (e) => {
+    _onFirstKeyRef = (e) => {
         if (!MOVEMENT_KEYS.has(e.code)) return;
-        document.removeEventListener('keydown', _onFirstKey);
+        document.removeEventListener('keydown', _onFirstKeyRef);
+        _onFirstKeyRef = null;
         _spawnLocalCar();
     };
-    document.addEventListener('keydown', _onFirstKey);
-
-    // Pas de label de nom pour le joueur local (caméra le suit)
+    document.addEventListener('keydown', _onFirstKeyRef);
 
     _connectToServer();
     return localPlayer;
@@ -109,11 +122,17 @@ export async function initMultiplayer() {
 
 // ── Connexion WebSocket ──────────────────────────────────────────────────────
 
+let _socket = null;
+
 function _connectToServer() {
+    // Ne créer la connexion qu'une seule fois (évite les doublons d'écouteurs)
+    if (_socket) return;
+
     const tryConnect = () => {
         if (typeof io === 'undefined') { setTimeout(tryConnect, 100); return; }
 
         const sock = io(window.location.origin);
+        _socket = sock;
 
         sock.on('connect', () => {
             sock.emit('register_display');

@@ -122,7 +122,16 @@ export function updateChaseCamera(players) {
 // ── Caméra principale (mode conduite + modes arène) ──────────────────────────
 export function updateCamera(players) {
     const active = Array.from(players.values()).filter(p => p.car);
-    if (active.length === 0) return;
+    if (active.length === 0) {
+        // Aucune voiture encore spawnée → position d'attente aérienne
+        if (_fixedTarget) {
+            _applyCamera(_fixedTarget);
+        } else {
+            camera.position.set(0, 22, 18);
+            camera.lookAt(0, 0, 0);
+        }
+        return;
+    }
 
     // Centroïde de tous les joueurs actifs
     let cx = 0, cz = 0;

@@ -6,7 +6,8 @@ import { isOnDirt, getHeightAt, getNormalAt } from './terrain.js';
 const VERT = `varying vec2 vUv;
     void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`;
 
-const FRAG = `uniform float uOpacity;uniform float uSeed;varying vec2 vUv;
+const FRAG = `precision mediump float;
+    uniform float uOpacity;uniform float uSeed;varying vec2 vUv;
     float rand(vec2 p){return fract(sin(dot(p+uSeed,vec2(127.1,311.7)))*43758.5453);}
     void main(){
         float edge=smoothstep(0.0,0.18,vUv.x)*smoothstep(1.0,0.82,vUv.x);

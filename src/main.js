@@ -16,12 +16,14 @@ import { initTitleScene, disposeTitleScene } from './titleScene.js';
 const MODE = new URLSearchParams(window.location.search).get('mode');
 
 // ── Mode normal (conduite libre) ──────────────────────────────────────────────
-async function startDriveMode() {
+async function startDriveMode(shouldRun) {
     initUI();
     startMusic();
     await initMultiplayer();
+    updateTerrain(0); // initialiser les patches dès le départ (spawn différé)
 
     function animate() {
+        if (shouldRun && !shouldRun()) return;
         requestAnimationFrame(animate);
         const now = performance.now();
         pollGamepads();
@@ -65,7 +67,7 @@ async function startDriveMode() {
 }
 
 // ── Mode parking ──────────────────────────────────────────────────────────────
-async function startParkingMode() {
+async function startParkingMode(shouldRun) {
     const { initParkingMode, updateParkingMode, getParkingTerrainY, isParkingActive, getStaticCars } =
         await import('./parking/ParkingMode.js');
 
@@ -75,6 +77,7 @@ async function startParkingMode() {
     await initParkingMode(players);
 
     function animate() {
+        if (shouldRun && !shouldRun()) return;
         requestAnimationFrame(animate);
         const now = performance.now();
         pollGamepads();
@@ -107,7 +110,7 @@ async function startParkingMode() {
 }
 
 // ── Mode poursuite (bagage) ───────────────────────────────────────────────────
-async function startChaseMode() {
+async function startChaseMode(shouldRun) {
     initUI();
     startMusic();
     await initMultiplayer();
@@ -120,6 +123,7 @@ async function startChaseMode() {
     let frames   = 0;
 
     function animate() {
+        if (shouldRun && !shouldRun()) return;
         requestAnimationFrame(animate);
         const now = performance.now();
         pollGamepads();
@@ -173,7 +177,7 @@ async function startChaseMode() {
             const lx = lp.car.position.x;
             const lz = lp.car.position.z;
             updateTerrain(lz);
-            sun.position.set(lx + 120, 80, lz + 60);
+            sun.position.set(lx + 150, 200, lz + 100);
             sun.target.position.set(lx, 0, lz);
             sun.target.updateMatrixWorld();
         }
@@ -186,7 +190,7 @@ async function startChaseMode() {
 }
 
 // ── Mode Tron ─────────────────────────────────────────────────────────────────
-async function startTronMode() {
+async function startTronMode(shouldRun) {
     const { initTronMode, updateTronMode, disposeTronMode } =
         await import('./modes/TronMode.js');
 
@@ -196,6 +200,7 @@ async function startTronMode() {
     await initTronMode(players);
 
     function animate() {
+        if (shouldRun && !shouldRun()) return;
         requestAnimationFrame(animate);
         const now = performance.now();
         pollGamepads();
@@ -222,7 +227,7 @@ async function startTronMode() {
 }
 
 // ── Mode Derby ─────────────────────────────────────────────────────────────────
-async function startDerbyMode() {
+async function startDerbyMode(shouldRun) {
     const { initDerbyMode, updateDerbyMode, isDerbyActive } =
         await import('./modes/DerbyMode.js');
 
@@ -232,6 +237,7 @@ async function startDerbyMode() {
     await initDerbyMode(players);
 
     function animate() {
+        if (shouldRun && !shouldRun()) return;
         requestAnimationFrame(animate);
         const now = performance.now();
         pollGamepads();
@@ -261,7 +267,7 @@ async function startDerbyMode() {
 }
 
 // ── Mode Battle ────────────────────────────────────────────────────────────────
-async function startBattleMode() {
+async function startBattleMode(shouldRun) {
     const { initBattleMode, updateBattleMode, isBattleActive } =
         await import('./modes/BattleMode.js');
 
@@ -269,8 +275,10 @@ async function startBattleMode() {
     startMusic();
     await initMultiplayer();
     await initBattleMode(players);
+    updateTerrain(0); // initialiser les patches dès le départ (spawn différé)
 
     function animate() {
+        if (shouldRun && !shouldRun()) return;
         requestAnimationFrame(animate);
         const now = performance.now();
         pollGamepads();
@@ -298,7 +306,7 @@ async function startBattleMode() {
             const lx = lp.car.position.x;
             const lz = lp.car.position.z;
             updateTerrain(lz);
-            sun.position.set(lx + 120, 80, lz + 60);
+            sun.position.set(lx + 150, 200, lz + 100);
             sun.target.position.set(lx, 0, lz);
             sun.target.updateMatrixWorld();
         }
@@ -312,7 +320,7 @@ async function startBattleMode() {
 }
 
 // ── Mode Football ──────────────────────────────────────────────────────────────
-async function startFootMode() {
+async function startFootMode(shouldRun) {
     const { initFootMode, updateFootMode } =
         await import('./modes/FootMode.js');
 
@@ -322,6 +330,7 @@ async function startFootMode() {
     await initFootMode(players);
 
     function animate() {
+        if (shouldRun && !shouldRun()) return;
         requestAnimationFrame(animate);
         const now = performance.now();
         pollGamepads();
@@ -349,7 +358,7 @@ async function startFootMode() {
 }
 
 // ── Mode Circuit (Micro Machines) ─────────────────────────────────────────────
-async function startCircuitMode() {
+async function startCircuitMode(shouldRun) {
     const { initCircuitMode, updateCircuitMode, updateCircuitCamera, isCircuitActive } =
         await import('./modes/CircuitMode.js');
 
@@ -361,6 +370,7 @@ async function startCircuitMode() {
     let lastNow = performance.now();
 
     function animate() {
+        if (shouldRun && !shouldRun()) return;
         requestAnimationFrame(animate);
         const now  = performance.now();
         const dt   = now - lastNow;
@@ -399,25 +409,30 @@ const LABELS_MAP = {
     battle:'🎈 Battle',        foot:'⚽ Football',
 };
 
+let _currentLoopId = 0;
+
 function _launchMode(mode) {
-    if (mode === 'parking')      startParkingMode();
-    else if (mode === 'chase')   startChaseMode();
-    else if (mode === 'tron')    startTronMode();
-    else if (mode === 'derby')   startDerbyMode();
-    else if (mode === 'battle')  startBattleMode();
-    else if (mode === 'foot')    startFootMode();
-    else if (mode === 'circuit') startCircuitMode();
-    else if (mode === 'drive')   startDriveMode();
+    _currentLoopId++;
+    const loopId = _currentLoopId;
+
+    // Fonction pour vérifier si on doit continuer la boucle
+    const shouldRun = () => loopId === _currentLoopId;
+
+    if (mode === 'parking')      startParkingMode(shouldRun);
+    else if (mode === 'chase')   startChaseMode(shouldRun);
+    else if (mode === 'tron')    startTronMode(shouldRun);
+    else if (mode === 'derby')   startDerbyMode(shouldRun);
+    else if (mode === 'battle')  startBattleMode(shouldRun);
+    else if (mode === 'foot')    startFootMode(shouldRun);
+    else if (mode === 'circuit') startCircuitMode(shouldRun);
+    else                         startDriveMode(shouldRun);
 }
 
 // Exposé pour démarrage depuis le menu SANS rechargement de page
 // (conserve le geste utilisateur → autoplay audio garanti)
 window._startGameMode = function(mode) {
-    disposeTitleScene(); // arrêter l'animation du titre
-    // Attacher le canvas du renderer si on démarre depuis le menu (pas de ?mode au chargement)
-    if (!document.body.contains(renderer.domElement)) {
-        document.body.appendChild(renderer.domElement);
-    }
+    disposeTitleScene();
+    renderer.domElement.style.display = 'block';
     const lbl = document.getElementById('mode-label');
     if (lbl) lbl.textContent = LABELS_MAP[mode] || mode;
     document.getElementById('game-ui')?.classList.remove('hidden');
@@ -426,6 +441,7 @@ window._startGameMode = function(mode) {
 
 // Démarrage direct (F5 / lien avec ?mode=xxx)
 if (MODE) {
+    renderer.domElement.style.display = 'block';
     document.getElementById('game-ui')?.classList.remove('hidden');
     _launchMode(MODE);
 } else {

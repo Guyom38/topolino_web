@@ -46,6 +46,7 @@ function _init() {
     _mesh = new THREE.Points(_geo, new THREE.ShaderMaterial({
         uniforms: { map: { value: _makeCloudTexture() } },
         vertexShader: `
+            precision highp float;
             attribute float size;
             attribute float alpha;
             varying float vAlpha;
@@ -55,6 +56,7 @@ function _init() {
                 gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
             }`,
         fragmentShader: `
+            precision highp float;
             uniform sampler2D map;
             varying float vAlpha;
             void main(){

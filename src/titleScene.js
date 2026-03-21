@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { getMaterialForMesh } from './materials.js';
+import { renderer } from './scene.js';
 
 // ── Couleurs carrosserie ──────────────────────────────────────────────────────
 const BODY_COLORS = [
@@ -29,7 +30,6 @@ const FRICTION    = 0.28;   // frottement tangentiel lors du contact
 const MIN_SPEED   = 0.018;
 const MAX_SPEED   = 0.110;
 
-let _renderer = null;
 let _scene    = null;
 let _camera   = null;
 let _cars     = [];
@@ -203,17 +203,17 @@ function _addDebugOBB(root, color) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export async function initTitleScene() {
-    const canvas = document.getElementById('cars-bg');
-    if (!canvas) return;
-
     const W = window.innerWidth, H = window.innerHeight;
 
-    _renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-    _renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-    _renderer.setSize(W, H);
-    _renderer.setClearColor(0x000000, 0);
+    // Renderer partagé avec le jeu — pas de second contexte WebGL
+    renderer.domElement.style.display = 'block';
+
+    // Rendre le fond du titre transparent pour laisser le canvas Three.js visible à travers
+    const titleEl = document.getElementById('title-screen');
+    if (titleEl) titleEl.style.background = 'transparent';
 
     _scene  = new THREE.Scene();
+    _scene.background = new THREE.Color(0x04091a); // fond sombre proche du CSS titre
     _camera = new THREE.PerspectiveCamera(55, W / H, 0.1, 500);
     _camera.position.set(0, 12, 10);
     _camera.lookAt(0, 0, 0);
@@ -248,8 +248,7 @@ export async function initTitleScene() {
 }
 
 function _onResize() {
-    if (!_renderer) return;
-    _renderer.setSize(window.innerWidth, window.innerHeight);
+    if (!_camera) return;
     _camera.aspect = window.innerWidth / window.innerHeight;
     _camera.updateProjectionMatrix();
 }
@@ -301,14 +300,15 @@ function _loop() {
         c.root.position.z = c.z;
     }
 
-    _renderer.render(_scene, _camera);
+    renderer.render(_scene, _camera);
 }
 
 export function disposeTitleScene() {
     _running = false;
     if (_animId) { cancelAnimationFrame(_animId); _animId = null; }
     window.removeEventListener('resize', _onResize);
-    if (_renderer) { _renderer.dispose(); _renderer = null; }
+    // Ne pas disposer le renderer — il est partagé avec le jeu
+    renderer.domElement.style.display = 'none'; // caché jusqu'au démarrage du jeu
     _scene = _camera = null;
     _cars  = [];
 }
