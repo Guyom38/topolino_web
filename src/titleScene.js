@@ -46,7 +46,9 @@ const BOT_Y2 = ROAD_BOT_Z - BOT_LANE;        // parking (côté herbe)
 const BOT_Y3 = ROAD_BOT_Z + BOT_LANE;        // circulation
 const PARK_SPOTS = (function() {
     const spots = [];
-    for (let x = -60; x <= 60; x += 11) spots.push({ x, z: BOT_Y2 });
+    // spotLen=78px sur texture 2048px pour route 140u → 78*140/2048 ≈ 5.3u par place
+    // espacement = largeur spot + 0.6u de marge = 5.9u
+    for (let x = -60; x <= 60; x += 5.9) spots.push({ x, z: BOT_Y2 });
     return spots;
 })();
 const PARK_DURATION_MIN = 10000; // 10s minimum
@@ -459,7 +461,7 @@ function _createRoadTexture(seed, withParking = false) {
         const ROAD_LEN = 140;
         const parkTop  = SIDEWALK + 6;          // bord haut de la zone parking
         const parkBot  = centerY - 6;           // bord bas (avant ligne centrale)
-        const spotLen  = 130;                   // largeur d'une baie en pixels
+        const spotLen  = 78;                    // largeur d'une baie en pixels (-40%)
         ctx.strokeStyle = 'rgba(255,255,255,0.85)';
         ctx.lineWidth   = 3;
         for (const sp of PARK_SPOTS) {
@@ -471,7 +473,7 @@ function _createRoadTexture(seed, withParking = false) {
             ctx.translate(px, (parkTop + parkBot) / 2);
             ctx.rotate(-Math.PI / 2);
             ctx.fillStyle = 'rgba(255,255,255,0.35)';
-            ctx.font = 'bold 58px Arial';
+            ctx.font = 'bold 28px Arial';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText('P', 0, 0);
