@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { scene } from './scene.js';
 
-export const BARRIER_R = 150;   // rayon du mur (unités)
+export const BARRIER_R = 80;    // rayon du mur (unités)
 
 const WALL_H   = 3.0;           // hauteur du mur
 const BOUNCE   = 0.30;          // coefficient de rebond (0 = mou, 1 = élastique)

@@ -63,8 +63,8 @@ export function getHeightAt(x, z) {
     // Fondu progressif vers 0 à l'approche de la barrière (conduite libre)
     // Permet à la caméra de voir le joueur sans que les collines masquent la vue
     if (!isChase && !isFoot) {
-        const FADE_START = 118;   // début du fondu
-        const FADE_END   = 148;   // terrain plat (juste avant le mur à r=150)
+        const FADE_START = 35;    // début du fondu
+        const FADE_END   = 60;    // terrain plat avant le mur à r=80
         if (dist > FADE_START) {
             const t = Math.min(1.0, (dist - FADE_START) / (FADE_END - FADE_START));
             h *= 1.0 - t * t * (3.0 - 2.0 * t); // smoothstep
@@ -130,9 +130,12 @@ export function getSlopeGrip(x, z) {
     return THREE.MathUtils.lerp(1.0, 0.82, THREE.MathUtils.clamp((ny - 0.90) / 0.10, 0, 1));
 }
 
-// --- Patches de terrain (3 recyclés) ---
+// --- Patches de terrain ---
+// Mode conduite libre (arène) : 1 patch carré couvrant le cercle r=80
+const ARENA_SIZE = 175;  const ARENA_SEG = 56;
+// Mode infini (route) : 3 patches rectangulaires recyclés
 const PATCH_W = 400, PATCH_D = 300;
-const SEG_W   = 64,  SEG_D   = 80; // Doublé la résolution (64x80) pour plus de finesse
+const SEG_W   = 64,  SEG_D   = 80;
 
 const GR = 0.28, GG = 0.52, GB = 0.15; // vert (plat)
 const BR = 0.42, BG = 0.28, BB = 0.12; // marron (pentu)
@@ -246,26 +249,23 @@ terrainMat.onBeforeCompile = shader => {
 };
 
 function recomputePatch(mesh) {
-    const cz  = mesh.position.z;
-    const geo = mesh.geometry;
-    const pos = geo.attributes.position;
-    const col = geo.attributes.color;
+    const cz   = mesh.position.z;
+    const geo  = mesh.geometry;
+    const pos  = geo.attributes.position;
+    const col  = geo.attributes.color;
     const norm = geo.attributes.normal;
+    const sw   = mesh.userData.segW;
+    const sd   = mesh.userData.segD;
 
-    for (let iz = 0; iz <= SEG_D; iz++) {
-        for (let ix = 0; ix <= SEG_W; ix++) {
-            const idx = iz * (SEG_W + 1) + ix;
+    for (let iz = 0; iz <= sd; iz++) {
+        for (let ix = 0; ix <= sw; ix++) {
+            const idx = iz * (sw + 1) + ix;
             const wx = pos.getX(idx);
             const wz = -pos.getY(idx) + cz;
             const h  = getHeightAt(wx, wz);
             pos.setZ(idx, h);
 
-            // Calcul de la normale précise via getNormalAt
             const n = getNormalAt(wx, wz);
-            // On mappe les axes pour la rotation du plan (X=-PI/2) :
-            // Local X = World X
-            // Local Y = -World Z
-            // Local Z = World Y
             norm.setXYZ(idx, n.x, -n.z, n.y);
 
             const t = THREE.MathUtils.clamp((0.97 - n.y) / 0.12, 0, 1);
@@ -273,14 +273,14 @@ function recomputePatch(mesh) {
         }
     }
 
-    pos.needsUpdate = true;
-    col.needsUpdate = true;
+    pos.needsUpdate  = true;
+    col.needsUpdate  = true;
     norm.needsUpdate = true;
 }
 
-function createPatch(centerZ) {
-    const geo  = new THREE.PlaneGeometry(PATCH_W, PATCH_D, SEG_W, SEG_D);
-    const vCnt = (SEG_W + 1) * (SEG_D + 1);
+function createPatch(centerZ, w, d, sw, sd) {
+    const geo  = new THREE.PlaneGeometry(w, d, sw, sd);
+    const vCnt = (sw + 1) * (sd + 1);
     geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(vCnt * 3), 3));
 
     const mesh = new THREE.Mesh(geo, terrainMat);
@@ -288,6 +288,8 @@ function createPatch(centerZ) {
     mesh.position.z    = centerZ;
     mesh.castShadow    = true;
     mesh.receiveShadow = true;
+    mesh.userData.segW = sw;
+    mesh.userData.segD = sd;
     scene.add(mesh);
     recomputePatch(mesh);
     return mesh;
@@ -297,11 +299,21 @@ let patches = null;
 
 function _ensurePatches() {
     if (patches) return;
-    patches = [
-        createPatch(0),
-        createPatch(-PATCH_D),
-        createPatch(-2 * PATCH_D),
-    ];
+    const search = new URLSearchParams(window.location.search);
+    const mode   = search.get('mode');
+    const isArena = !mode || (mode !== 'chase' && mode !== 'foot');
+
+    if (isArena) {
+        // Mode conduite libre : patch unique carré centré sur l'arène (r=80)
+        patches = [ createPatch(0, ARENA_SIZE, ARENA_SIZE, ARENA_SEG, ARENA_SEG) ];
+    } else {
+        // Autres modes : 3 patches rectangulaires recyclés
+        patches = [
+            createPatch(0,             PATCH_W, PATCH_D, SEG_W, SEG_D),
+            createPatch(-PATCH_D,      PATCH_W, PATCH_D, SEG_W, SEG_D),
+            createPatch(-2 * PATCH_D,  PATCH_W, PATCH_D, SEG_W, SEG_D),
+        ];
+    }
 }
 
 export function refreshTerrain() {
@@ -311,8 +323,10 @@ export function refreshTerrain() {
 
 export function updateTerrain(carZ) {
     _ensurePatches();
-    const isChase = new URLSearchParams(window.location.search).get('mode') === 'chase';
-    if (isChase) return; // Pas de défilement en mode poursuite
+    const search  = new URLSearchParams(window.location.search);
+    const mode    = search.get('mode');
+    // Arène (conduite libre) et poursuite : pas de défilement
+    if (!mode || mode === 'chase') return;
 
     for (const p of patches) {
         const cz = p.position.z;

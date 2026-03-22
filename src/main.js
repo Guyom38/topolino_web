@@ -3,7 +3,7 @@ import { loadSettings, applyAllSettings, settings, scheduleFrame } from './setti
 import { initSettingsUI } from './settingsUI.js';
 import { scene, camera, renderer, sun, ambient } from './scene.js';
 import { updatePhysics } from './physics.js';
-import { updateCamera, updateChaseCamera } from './camera.js';
+import { updateCamera, updateChaseCamera, tickCameraDebug } from './camera.js';
 import { updateTerrain, getHeightAt, refreshTerrain } from './terrain.js';
 import { updateCollisions, updateEnvironmentCollisions } from './collisions.js';
 import { players, initMultiplayer, getLocalPlayer, pollGamepads } from './multiplayer.js';
@@ -86,43 +86,22 @@ async function startDriveMode(shouldRun) {
 
             updateTerrain(lz);
 
-            // Cycle jour/nuit : arc de 10 minutes (0→π aller, π→2π retour)
-            const CYCLE = 10 * 60 * 1000;
-            const sunAngle = ((now % CYCLE) / CYCLE) * Math.PI * 2;
-            const sunHeight = Math.sin(sunAngle);           // -1..1
-            const sunX = Math.cos(sunAngle) * 300;          // pendule gauche/droite
-            const sunY = Math.max(10, sunHeight * 250);     // sous horizon = 10
-            sun.position.set(lx + sunX, sunY, lz + 60);
+            // Soleil fixe — plein jour
+            sun.position.set(lx + 200, 220, lz + 60);
             sun.target.position.set(lx, 0, lz);
             sun.target.updateMatrixWorld();
-
-            // Facteur jour 0=nuit 1=jour
-            const dayF = THREE.MathUtils.smoothstep(sunHeight, -0.15, 0.25);
-            // Coucher/lever : pic de couleur orangée
-            const duskF = Math.max(0, 1 - Math.abs(sunHeight) * 5);
-
-            // Intensité soleil
-            sun.intensity = THREE.MathUtils.lerp(0.0, 2.2, dayF);
-            // Couleur soleil : blanc jour → orange crépuscule → bleu nuit
-            sun.color.setHex(0xfff5e0).lerp(new THREE.Color(0xff6020), duskF * 0.7);
-
-            // Ambiante : lumière lunaire la nuit
-            ambient.intensity = THREE.MathUtils.lerp(0.12, 0.18, dayF);
-            ambient.color.setHex(dayF > 0.5 ? 0xd0e8ff : 0x0d1a3a);
-
-            // Ciel + brouillard
-            const skyNight = new THREE.Color(0x04091a);
-            const skyDusk  = new THREE.Color(0x1a0a2e);
-            const skyDay   = new THREE.Color(0x87CEEB);
-            const sky = skyNight.clone().lerp(skyDay, dayF);
-            if (duskF > 0) sky.lerp(skyDusk, duskF * 0.4);
-            scene.background.copy(sky);
-            scene.fog.color.copy(sky);
+            sun.intensity = 2.2;
+            sun.color.setHex(0xfff5e0);
+            ambient.intensity = 0.18;
+            ambient.color.setHex(0xd0e8ff);
+            scene.background.setHex(0x87CEEB);
+            scene.fog.color.setHex(0x87CEEB);
         }
 
         updateBarrier();
         updateOffscreenArrows(players);
         updateSparks(now);
+        tickCameraDebug(now);
         updateUI(players);
         renderer.render(scene, camera);
     }

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { camera } from './scene.js';
 
 // ── Paramètres orbitaux ───────────────────────────────────────────────────────
-let PHI    = 0.52;           // angle vertical depuis le zénith (rad)
+let PHI    = 0.80;           // angle vertical depuis le zénith (rad)
 let THETA  = Math.PI * 0.80; // angle horizontal (rad)
 let RADIUS = 36;             // distance caméra–cible (auto-gérée en mode conduite)
 
@@ -16,22 +16,45 @@ let _autoZoom  = true;
 let _userZoom  = 0;   // offset ajouté par la molette
 
 // ── Contrôles souris ──────────────────────────────────────────────────────────
-let _dragging = false, _mx = 0, _my = 0;
+let _dragging = false, _panning = false, _mx = 0, _my = 0;
 
 document.addEventListener('mousedown', e => {
     if (e.button === 0) { _dragging = true; _mx = e.clientX; _my = e.clientY; }
+    if (e.button === 2) { _panning  = true; _mx = e.clientX; _my = e.clientY; }
 });
-document.addEventListener('mouseup',   () => { _dragging = false; });
+document.addEventListener('mouseup',   e => {
+    if (e.button === 0) _dragging = false;
+    if (e.button === 2) _panning  = false;
+});
+document.addEventListener('contextmenu', e => e.preventDefault());
 document.addEventListener('mousemove', e => {
-    if (!_dragging) return;
-    THETA -= (e.clientX - _mx) * 0.005;
-    PHI    = THREE.MathUtils.clamp(PHI + (e.clientY - _my) * 0.005, 0.05, Math.PI * 0.48);
+    const dx = e.clientX - _mx;
+    const dy = e.clientY - _my;
     _mx = e.clientX; _my = e.clientY;
+
+    if (_dragging) {
+        THETA -= dx * 0.005;
+        PHI    = THREE.MathUtils.clamp(PHI + dy * 0.005, 0.05, Math.PI * 0.48);
+    }
+    if (_panning && !_autoZoom) {
+        // Pan uniquement en mode fixe (arène) — désactivé en auto-suivi joueurs
+        const speed = RADIUS * 0.0015;
+        const cosT  = Math.cos(THETA), sinT = Math.sin(THETA);
+        currentTarget.x += (-dx * cosT + dy * Math.cos(PHI) * sinT) * speed;
+        currentTarget.z += ( dx * sinT + dy * Math.cos(PHI) * cosT) * speed;
+    }
 });
 document.addEventListener('wheel', e => {
-    // La molette ajuste un offset sur le rayon auto ; il ne se réinitialise pas.
     _userZoom = THREE.MathUtils.clamp(_userZoom + e.deltaY * 0.05, -30, 60);
 }, { passive: true });
+
+// ── Debug console (toutes les secondes) ───────────────────────────────────────
+let _lastLog = 0;
+export function tickCameraDebug(now) {
+    if (now - _lastLog < 1000) return;
+    _lastLog = now;
+    console.log(`[Caméra] PHI=${(PHI * 180 / Math.PI).toFixed(1)}°  THETA=${(THETA * 180 / Math.PI).toFixed(1)}°  RADIUS=${RADIUS.toFixed(1)}  target=(${currentTarget.x.toFixed(1)}, ${currentTarget.y.toFixed(1)}, ${currentTarget.z.toFixed(1)})`);
+}
 
 // ── État interne ──────────────────────────────────────────────────────────────
 const currentTarget = new THREE.Vector3();
@@ -152,23 +175,26 @@ export function updateCamera(players) {
     // Clamp pour éviter les extrêmes (grands sauts, chutes)
     _centroid.set(cx, THREE.MathUtils.clamp(cy, -9, 16), cz);
 
-    // Mise à jour de la cible interpolée
-    if (_fixedTarget) {
-        if (!initialized) { currentTarget.copy(_fixedTarget); initialized = true; }
-        currentTarget.lerp(_fixedTarget, TARGET_LERP);
-    } else {
-        if (!initialized) { currentTarget.copy(_centroid); initialized = true; }
-        currentTarget.lerp(_centroid, TARGET_LERP);
-    }
+    // Cible = centroïde exact de tous les joueurs (ou cible fixe en mode arène)
+    const dest = _fixedTarget ?? _centroid;
+    if (!initialized) { currentTarget.copy(dest); initialized = true; }
+    currentTarget.lerp(dest, TARGET_LERP);
 
-    // Auto-zoom dynamique (mode conduite uniquement)
+    // Auto-zoom + auto-PHI dynamiques (mode conduite uniquement)
     if (_autoZoom) {
-        const span        = Math.max(maxX - minX, maxZ - minZ);
-        // Rayon auto : base 38 + 0.7× l'écartement max des joueurs
-        const autoRadius  = THREE.MathUtils.clamp(span * 0.7 + 38, 34, 100);
+        const span = Math.max(maxX - minX, maxZ - minZ);
+
+        // Rayon : couvre tout l'écartement + ~10 unités de marge de chaque côté
+        const autoRadius   = THREE.MathUtils.clamp(span * 0.9 + 18, 18, 115);
         const targetRadius = THREE.MathUtils.clamp(autoRadius + _userZoom, RADIUS_MIN, RADIUS_MAX);
-        // Interpolation fluide pour éviter les sauts
-        RADIUS += (targetRadius - RADIUS) * 0.045;
+        RADIUS += (targetRadius - RADIUS) * 0.04;
+
+        // PHI : 60° si joueurs proches → 0° si joueurs éloignés (vue du dessus)
+        const PHI_CLOSE  = Math.PI / 3;   // 60°
+        const PHI_FAR    = 0.05;          // quasi top-down
+        const spanNorm   = THREE.MathUtils.clamp((span - 5) / 60, 0, 1);
+        const targetPHI  = THREE.MathUtils.lerp(PHI_CLOSE, PHI_FAR, spanNorm);
+        PHI += (targetPHI - PHI) * 0.03;
     }
 
     _applyCamera(currentTarget);
