@@ -77,7 +77,7 @@ const vertMeshes = new Set([
 ]);
 
 // ── Matériaux police ──────────────────────────────────────────────────────────
-export const POLICE_COLOR = '#6BAABB';   // bleu cyan légèrement gris
+export const POLICE_COLOR = '#8A8A8A';   // gris métallique (identique au matériau gris de base)
 
 export const policeMaterials = {
     stripeRed:  new THREE.MeshStandardMaterial({ color: 0xCC1111, roughness: 0.35, metalness: 0.10, emissive: new THREE.Color(0x220000) }),
@@ -92,7 +92,7 @@ export function getPoliceDoorMaterial() {
     const c = document.createElement('canvas');
     c.width = W; c.height = H;
     const ctx = c.getContext('2d');
-    ctx.fillStyle = POLICE_COLOR;
+    ctx.fillStyle = '#8A8A8A'; // Nouveau gris pour le fond des portières
     ctx.fillRect(0, 0, W, H);
     // Ombre portée pour l'épaisseur
     ctx.font = 'bold 90px "Arial Black", Arial';

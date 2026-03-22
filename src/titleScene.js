@@ -265,6 +265,9 @@ function _buildCar(fbxTemplate, color, isPolice = false) {
     clone.position.z = -ctr.z;
     clone.position.y = -box.min.y;
 
+    const brakeMeshes   = []; // feux stop rouges
+    const reverseMeshes = []; // feux de recul blancs
+
     clone.traverse(child => {
         if (!child.isMesh) return;
         child.castShadow    = true;
@@ -280,9 +283,34 @@ function _buildCar(fbxTemplate, color, isPolice = false) {
             child.material = mat ?? new THREE.MeshStandardMaterial({ color, roughness: 0.35, metalness: 0.12 });
         }
         if (child.name.toLowerCase().includes('bagage')) child.visible = false;
+
+        // ── Collecte des feux arrière (clone impératif pour ne pas partager le matériau) ──
+        const n = child.name.toLowerCase();
+        const isBrake   = n.includes('phares_arriere_stop') || n.includes('lumineux_arriere_parchoque');
+        const isReverse = n === 'phares_arrieres';
+        if (isBrake || isReverse) {
+            child.material = child.material.clone();
+            child.material.emissive          = new THREE.Color(isBrake ? 0x550000 : 0x111111);
+            child.material.emissiveIntensity = 0.05;
+            if (isBrake) brakeMeshes.push(child);
+            else         reverseMeshes.push(child);
+        }
     });
 
-    return clone;
+    return { group: clone, brakeMeshes, reverseMeshes };
+}
+
+function _setBrakeLights(c, on) {
+    for (const m of c.brakeMeshes) {
+        m.material.emissive.setHex(on ? 0xff1100 : 0x550000);
+        m.material.emissiveIntensity = on ? 9.0 : 0.05;
+    }
+}
+function _setReverseLights(c, on) {
+    for (const m of c.reverseMeshes) {
+        m.material.emissive.setHex(on ? 0xffffff : 0x111111);
+        m.material.emissiveIntensity = on ? 6.0 : 0.05;
+    }
 }
 
 // _buildGirophare délègue à addGirophare de car.js (même code, même rendu)
@@ -597,7 +625,8 @@ export async function initTitleScene() {
         const isPolice = (i % 7 === 0);
         const color    = isPolice ? policeColor : BODY_COLORS[i % BODY_COLORS.length];
         const root     = new THREE.Group();
-        root.add(_buildCar(fbxTemplate, color, isPolice));
+        const { group: carGroup, brakeMeshes, reverseMeshes } = _buildCar(fbxTemplate, color, isPolice);
+        root.add(carGroup);
         if (DEBUG_OBB) _addDebugOBB(root, color);
         _scene.add(root);
 
@@ -627,6 +656,8 @@ export async function initTitleScene() {
             parkDuration: 0,
             _revT: 0, _revStartX: 0, _revStartZ: 0, // marche arrière bezier
             _leaveT: 0,                              // sortie bezier
+            _wantsLeave: false,                      // en attente de sortir du parking
+            brakeMeshes, reverseMeshes,              // feux stop / recul
         };
         _cars.push(c);
         const idx   = road === 0 ? i : i - CARS_TOP;
@@ -643,7 +674,7 @@ export async function initTitleScene() {
             c.parkSpot     = PRE_SPOTS[preSpotIdx];
             c.parkDuration = PARK_DURATION_MIN + Math.random() * (PARK_DURATION_MAX - PARK_DURATION_MIN);
             c.parkTimer    = performance.now() - Math.random() * c.parkDuration; // timer déjà en cours
-            c.angle        = -Math.PI / 2; // perpendiculaire, face vers Y3
+            c.angle        = Math.PI; // parallèle à la circulation
             c.root.position.set(c.x, 0, c.z);
             c.root.rotation.y = c.angle;
         }
@@ -741,13 +772,14 @@ function _loop() {
             const BRAKE_DIST = 7;             // début de freinage
 
             // 1) Accélération vers la vitesse cible (pas pendant manœuvre parking)
-            const isParking = c.parkState === 'braking' || c.parkState === 'reversing' || c.parkState === 'parked';
-            if (!isParking && Math.abs(c.vx) < c.baseSpeed) {
+            const isManeuver = c.parkState === 'reversing' || c.parkState === 'parked' || c.parkState === 'leaving';
+            const isBraking  = c.parkState === 'braking';
+            if (!isManeuver && !isBraking && Math.abs(c.vx) < c.baseSpeed) {
                 c.vx += c.dir * THRUST;
             }
 
-            // 2) Braquage latéral (désactivé pendant manœuvre parking pour éviter le glissement diagonal)
-            if (!isParking) {
+            // 2) Braquage latéral (désactivé pendant manœuvre parking)
+            if (!isManeuver && !isBraking) {
                 const dz = c.targetZ - c.z;
                 c.vz += dz * 0.008;
                 c.vz *= 0.88;
@@ -760,16 +792,34 @@ function _loop() {
                 if (other === c || other.road !== c.road) continue;
                 if (_getPlayerEntry(other)) continue;
                 const ahead = c.dir * (other.x - c.x);
-                if (ahead > 0 && ahead < LOOK_AHEAD && Math.abs(other.z - c.z) < 2.5) {
+                // Zone Z élargie pour manœuvres parking et voitures voulant sortir
+                const parkManeuver = other.parkState === 'braking' || other.parkState === 'reversing';
+                const zThresh = (parkManeuver || other._wantsLeave) ? 6.0 : 2.5;
+                if (ahead > 0 && ahead < LOOK_AHEAD + 4 && Math.abs(other.z - c.z) < zThresh) {
                     if (ahead < closestDist) { closestDist = ahead; closestCar = other; }
                 }
             }
 
-            // 4) Freinage si danger
+            // 4) Freinage et distance de sécurité
+            let _didBrake = false;
             if (closestCar && closestDist < BRAKE_DIST) {
                 const otherSp = Math.abs(closestCar.vx);
-                if (Math.abs(c.vx) > otherSp) {
-                    c.vx *= closestDist < SAFE_GAP ? 0.88 : 0.95;
+                // 1 longueur de voiture derrière un véhicule en manœuvre, 1.5 pour céder le passage
+                const targetGap = (closestCar.parkState === 'braking' || closestCar.parkState === 'reversing')
+                    ? CAR_HL * 2.5
+                    : closestCar._wantsLeave
+                        ? CAR_HL * 3
+                        : SAFE_GAP;
+                if (Math.abs(c.vx) > otherSp || closestDist < CAR_HL * 1.5) {
+                    if (closestDist < CAR_HL * 1.5) {
+                        // Urgence : stopper immédiatement
+                        c.vx = c.dir * Math.min(Math.abs(c.vx) * 0.6, Math.abs(otherSp));
+                    } else if (closestDist < targetGap) {
+                        c.vx *= 0.88; // freinage fort
+                    } else {
+                        c.vx *= 0.95; // freinage doux
+                    }
+                    _didBrake = closestDist < BRAKE_DIST;
                 }
             }
 
@@ -785,68 +835,103 @@ function _loop() {
                 const now = performance.now();
 
                 if (c.parkState === 'braking') {
-                    // ── Phase 1 : freiner sur Y3, dépasser la place d'une demi-longueur ──
+                    // ── Phase 1 : rouler jusqu'à dépasser la place, puis freiner ──
                     const spot = PARK_SPOTS[c.parkSpot];
-                    c.targetZ = c.mainZ;   // reste sur Y3
-                    c.vx *= 0.92;          // freinage progressif
-                    // Transition : a dépassé la place d'au moins CAR_HL ET quasi arrêté
-                    const passed = c.dir * (c.x - spot.x);
-                    if (passed > CAR_HL && Math.abs(c.vx) < MIN_SPEED * 0.5) {
-                        c.vx = 0; c.vz = 0;
-                        c.parkState  = 'reversing';
-                        c._revT      = 0;
-                        c._revStartX = c.x;
-                        c._revStartZ = c.z;
+                    c.targetZ = c.mainZ;
+                    const distPast = c.dir * (c.x - spot.x); // >0 = a dépassé la place
+
+                    if (distPast < 0) {
+                        // Pas encore dépassé : maintenir la vitesse
+                        if (Math.abs(c.vx) < c.baseSpeed) c.vx += c.dir * THRUST;
+                    } else {
+                        // Dépassé la place : freinage fort
+                        c.vx *= 0.88;
+                        if (distPast > CAR_HL && Math.abs(c.vx) < MIN_SPEED * 0.4) {
+                            c.vx = 0; c.vz = 0;
+                            c.parkState  = 'reversing';
+                            c._revT      = 0;
+                            c._revStartX = c.x;
+                            c._revStartZ = c.z;
+                        }
                     }
                 } else if (c.parkState === 'reversing') {
-                    // ── Phase 2 : marche arrière en courbe bezier vers Y2 ────
+                    // ── Phase 2 : marche arrière en S (bezier cubique) vers Y2 ──
+                    // La voiture recule en braquant puis se redresse, parallèle à la circulation
                     const spot = PARK_SPOTS[c.parkSpot];
-                    // Bezier quadratique : P0=(revStartX,Y3), P1=(spot.x,Y3), P2=(spot.x,Y2)
+                    const dx = spot.x - c._revStartX;        // distance X à parcourir (>0 = recule)
                     const P0x = c._revStartX, P0z = c._revStartZ;
-                    const P1x = spot.x,       P1z = c.mainZ;
-                    const P2x = spot.x,       P2z = spot.z;
-                    c._revT = Math.min(c._revT + 0.007, 1.0);
+                    const P1x = P0x + dx * 0.5, P1z = P0z;  // tangente horizontale départ
+                    const P2x = spot.x - dx * 0.5, P2z = spot.z; // tangente horizontale arrivée
+                    const P3x = spot.x,           P3z = spot.z;
+
+                    c._revT = Math.min(c._revT + 0.008, 1.0);
                     const t = c._revT, mt = 1 - t;
-                    c.x = mt*mt*P0x + 2*mt*t*P1x + t*t*P2x;
-                    c.z = mt*mt*P0z + 2*mt*t*P1z + t*t*P2z;
+                    c.x = mt*mt*mt*P0x + 3*mt*mt*t*P1x + 3*mt*t*t*P2x + t*t*t*P3x;
+                    c.z = mt*mt*mt*P0z + 3*mt*mt*t*P1z + 3*mt*t*t*P2z + t*t*t*P3z;
                     c.vx = 0; c.vz = 0;
-                    // Tangente → orientation (marche arrière : +π pour que la caisse regarde vers Y3)
-                    const dBx = 2*mt*(P1x-P0x) + 2*t*(P2x-P1x);
-                    const dBz = 2*mt*(P1z-P0z) + 2*t*(P2z-P1z);
+                    // Tangente → orientation (+π : marche arrière, reste parallèle circulation)
+                    const dBx = 3*(mt*mt*(P1x-P0x) + 2*mt*t*(P2x-P1x) + t*t*(P3x-P2x));
+                    const dBz = 3*(mt*mt*(P1z-P0z) + 2*mt*t*(P2z-P1z) + t*t*(P3z-P2z));
                     c.angle = Math.atan2(-dBz, dBx) + Math.PI;
                     if (t >= 1.0) {
-                        c.x = P2x; c.z = P2z;
+                        c.x = P3x; c.z = P3z;
                         c.vx = 0; c.vz = 0;
                         c.parkState    = 'parked';
                         c.parkDuration = PARK_DURATION_MIN + Math.random() * (PARK_DURATION_MAX - PARK_DURATION_MIN);
                         c.parkTimer    = now;
-                        c.angle        = -Math.PI / 2; // perpendiculaire, face vers Y3
+                        c.angle        = Math.PI; // parallèle à la circulation
                     }
                 } else if (c.parkState === 'parked') {
-                    // ── Phase 3 : garée ───────────────────────────────────────
+                    // ── Phase 3 : garée, puis attendre un créneau pour partir ──
                     c.vx = 0; c.vz = 0;
                     if (now - c.parkTimer > c.parkDuration) {
-                        c.parkState = 'leaving';
-                        c._leaveT   = 0;
+                        c._wantsLeave = true; // signal feux stop, signal aux approchants
+                    }
+                    if (c._wantsLeave) {
+                        // Vérifier si la voie Y3 est dégagée pour la sortie
+                        const spot     = PARK_SPOTS[c.parkSpot];
+                        const exitDist = CAR_HL * 5;
+                        let pathClear = true;
+                        let yielded   = false;
+                        for (const other of _cars) {
+                            if (other === c || other.road !== c.road || other.parkState === 'parked') continue;
+                            const inZone = Math.abs(other.x - spot.x) < exitDist + CAR_HL * 2
+                                        && Math.abs(other.z - c.mainZ) < 3.5;
+                            if (inZone) {
+                                pathClear = false;
+                                // Voiture approchant depuis derrière (trafic venant de droite pour dir=-1)
+                                // qui s'est arrêtée pour céder le passage
+                                const fromBehind = c.dir * (other.x - spot.x) < -CAR_HL;
+                                if (fromBehind && Math.abs(other.vx) < MIN_SPEED * 0.8) {
+                                    yielded = true;
+                                }
+                            }
+                        }
+                        if (pathClear || yielded) {
+                            c.parkState   = 'leaving';
+                            c._leaveT     = 0;
+                            c._wantsLeave = false;
+                        }
                     }
                 } else if (c.parkState === 'leaving') {
-                    // ── Phase 4 : sortie en courbe bezier vers Y3 ────────────
+                    // ── Phase 4 : sortie en S (bezier cubique) vers Y3 ────────
                     const spot = PARK_SPOTS[c.parkSpot];
-                    // Bezier : P0=(spot.x,Y2), P1=(spot.x,Y3), P2=(spot.x+dir*CAR_HL*4, Y3)
-                    const P0x = spot.x,                     P0z = spot.z;
-                    const P1x = spot.x,                     P1z = c.mainZ;
-                    const P2x = spot.x + c.dir * CAR_HL * 4, P2z = c.mainZ;
-                    c._leaveT = Math.min(c._leaveT + 0.006, 1.0);
+                    const exitDist = CAR_HL * 5;
+                    const P0x = spot.x, P0z = spot.z;
+                    const P1x = P0x + c.dir * exitDist * 0.5, P1z = P0z;    // reste Y2
+                    const P2x = P1x,                          P2z = c.mainZ; // même X, passe à Y3
+                    const P3x = P0x + c.dir * exitDist,       P3z = c.mainZ;
+
+                    c._leaveT = Math.min(c._leaveT + 0.007, 1.0);
                     const t = c._leaveT, mt = 1 - t;
-                    c.x = mt*mt*P0x + 2*mt*t*P1x + t*t*P2x;
-                    c.z = mt*mt*P0z + 2*mt*t*P1z + t*t*P2z;
+                    c.x = mt*mt*mt*P0x + 3*mt*mt*t*P1x + 3*mt*t*t*P2x + t*t*t*P3x;
+                    c.z = mt*mt*mt*P0z + 3*mt*mt*t*P1z + 3*mt*t*t*P2z + t*t*t*P3z;
                     c.vx = 0; c.vz = 0;
-                    // Tangente → orientation (marche avant)
-                    const dBx = 2*mt*(P1x-P0x) + 2*t*(P2x-P1x);
-                    const dBz = 2*mt*(P1z-P0z) + 2*t*(P2z-P1z);
+                    const dBx = 3*(mt*mt*(P1x-P0x) + 2*mt*t*(P2x-P1x) + t*t*(P3x-P2x));
+                    const dBz = 3*(mt*mt*(P1z-P0z) + 2*mt*t*(P2z-P1z) + t*t*(P3z-P2z));
                     if (Math.hypot(dBx, dBz) > 0.001) c.angle = Math.atan2(-dBz, dBx);
                     if (t >= 1.0) {
-                        c.x = P2x; c.z = P2z;
+                        c.x = P3x; c.z = P3z;
                         c.parkState = null;
                         c.parkSpot  = null;
                         c._leaveT   = 0;
@@ -931,6 +1016,10 @@ function _loop() {
                     }
                 }
             }
+
+            // Feux stop / recul
+            _setBrakeLights(c, c.parkState === 'braking' || c._wantsLeave || _didBrake);
+            _setReverseLights(c, c.parkState === 'reversing');
 
             // 7) Boucle : haut sort à droite → bas entre à droite ; bas sort à gauche → haut entre à gauche
             //    Ne pas boucler si la voiture est garée ou en approche

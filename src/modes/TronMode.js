@@ -1,192 +1,187 @@
-// ── Mode Tron : traces infinies, respawn et grille géante ────────────────────
+// ── Mode Tron : Correction affichage traces ─────────────────────────────────
 import * as THREE from 'three';
 import { scene } from '../scene.js';
 import { setTronCamera, setCameraFixed, setCameraFollow } from '../camera.js';
+import { setPlayerScore } from '../ui.js';
 
-const ARENA_SIZE     = 160;  // Plus grand pour occuper tout l'écran
-const TRAIL_SAMPLE   = 2;    // Plus fréquent pour la précision
-const MAX_TRAIL      = 2000; // Traces très longues
-const TRAIL_W        = 0.8;
-const TRAIL_H        = 2.0;
-const HIT_DIST       = 1.2;
-const GRACE_POINTS   = 10;   // Zone autour de la voiture sans collision
+const ARENA_SIZE     = 160;
+const TRAIL_DIST     = 1.2;  // Segments plus courts
+const TRAIL_W        = 1.2;
+const TRAIL_H        = 3.0;
+const HIT_DIST       = 1.5;
 
 let _arena    = null;
-let _trails   = new Map();   // playerId → { points[], mesh, active }
-let _frameCount = 0;
+let _trails   = new Map();   // playerId → { lastPos, meshes[], color, active }
+let _scores   = new Map();
+let _trailGroup = null;
 
-// ── Arène ────────────────────────────────────────────────────────────────────
 function _createArena() {
     const group = new THREE.Group();
-
-    // Sol sombre
+    // Sol
     const floor = new THREE.Mesh(
-        new THREE.PlaneGeometry(ARENA_SIZE + 20, ARENA_SIZE + 20),
-        new THREE.MeshStandardMaterial({ color: 0x02050a, roughness: 0.8 })
+        new THREE.PlaneGeometry(ARENA_SIZE + 40, ARENA_SIZE + 40),
+        new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.8 })
     );
     floor.rotation.x = -Math.PI / 2;
-    floor.position.y = -0.05;
+    floor.position.y = -0.1;
     group.add(floor);
 
-    // Grille Néon
+    // Grille
     const cv  = document.createElement('canvas'); cv.width = cv.height = 1024;
     const ctx = cv.getContext('2d');
-    ctx.strokeStyle = '#00f2ff';
-    ctx.lineWidth = 2;
-    const steps = 32;
-    for (let i = 0; i <= steps; i++) {
-        const p = i / steps * 1024;
+    ctx.strokeStyle = '#00f2ff'; ctx.lineWidth = 4;
+    for (let i = 0; i <= 32; i++) {
+        const p = i / 32 * 1024;
         ctx.beginPath(); ctx.moveTo(p, 0); ctx.lineTo(p, 1024); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(0, p); ctx.lineTo(1024, p); ctx.stroke();
     }
-    const gridTex = new THREE.CanvasTexture(cv);
-    gridTex.wrapS = gridTex.wrapT = THREE.RepeatWrapping;
-    gridTex.repeat.set(1, 1);
-    
     const gridMesh = new THREE.Mesh(
         new THREE.PlaneGeometry(ARENA_SIZE, ARENA_SIZE),
-        new THREE.MeshBasicMaterial({ map: gridTex, transparent: true, opacity: 0.4, depthWrite: false })
+        new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, opacity: 0.6 })
     );
     gridMesh.rotation.x = -Math.PI / 2;
-    gridMesh.position.y = 0.01;
+    gridMesh.position.y = 0.05;
     group.add(gridMesh);
 
     scene.add(group);
     return group;
 }
 
-function _resetPlayer(p, t) {
+function _resetPlayer(p) {
     const ang = Math.random() * Math.PI * 2;
-    const r   = ARENA_SIZE * 0.4;
+    const r   = ARENA_SIZE * 0.35;
     p.car.position.set(Math.cos(ang) * r, 0, Math.sin(ang) * r);
     p.carAngle = ang + Math.PI;
     p.car.rotation.y = p.carAngle;
     p.carSpeed = 0;
     p.velocity.set(0, 0, 0);
-    p.verticalVelocity = 0;
-    p.onGround = true;
-
-    // Vider la trace
-    t.points = [];
-    t.mesh.count = 0;
+    
+    const t = _trails.get(p.id);
+    if (t) {
+        t.lastPos.copy(p.car.position);
+        t.active = false;
+    }
 }
 
-// ── Init ─────────────────────────────────────────────────────────────────────
-export async function initTronMode(players) {
-    scene.background = new THREE.Color(0x000205);
-    scene.fog = null;
+function _clearTrail(playerId) {
+    const t = _trails.get(playerId);
+    if (!t || !_trailGroup) return;
+    t.meshes.forEach(m => {
+        _trailGroup.remove(m);
+        m.geometry.dispose();
+        m.material.dispose();
+    });
+    t.meshes = [];
+}
 
+export async function initTronMode(players) {
+    scene.background = new THREE.Color(0x000000);
     _arena = _createArena();
+    
+    // Initialiser le groupe de traces
+    if (_trailGroup) scene.remove(_trailGroup);
+    _trailGroup = new THREE.Group();
+    scene.add(_trailGroup);
+
     _trails.clear();
-    _frameCount = 0;
+    _scores.clear();
 
     players.forEach(p => {
         if (!p.car) return;
-        
-        const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(p.colorHex), side: THREE.DoubleSide });
-        const mesh = new THREE.InstancedMesh(
-            new THREE.BoxGeometry(TRAIL_W, TRAIL_H, 1),
-            mat,
-            MAX_TRAIL
-        );
-        mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-        mesh.count = 0;
-        scene.add(mesh);
-
-        const t = { points: [], mesh, active: false };
-        _trails.set(p.id, t);
-        _resetPlayer(p, t);
+        _trails.set(p.id, { 
+            lastPos: p.car.position.clone(), 
+            meshes: [], 
+            color: new THREE.Color(p.colorHex),
+            active: false 
+        });
+        _scores.set(p.id, 0);
+        _resetPlayer(p);
+        setPlayerScore(p.id, "0 pts");
     });
 
     setTronCamera();
     setCameraFixed(0, 0, 0);
 }
 
-// ── Update ────────────────────────────────────────────────────────────────────
-const _mat4 = new THREE.Matrix4();
-
 export function updateTronMode(players, now) {
-    _frameCount++;
+    if (!_trailGroup) return;
 
     for (const [id, p] of players) {
         if (!p.car) continue;
         const t = _trails.get(id);
         if (!t) continue;
 
-        // Activer la trace dès que la voiture bouge
-        if (!t.active && (Math.abs(p.carSpeed) > 0.05)) {
+        // Trace active dès que la vitesse dépasse 0.05
+        if (!t.active && Math.abs(p.carSpeed) > 0.05) {
             t.active = true;
+            t.lastPos.copy(p.car.position);
         }
 
         if (t.active) {
-            // Enregistrement des points
-            if (_frameCount % TRAIL_SAMPLE === 0) {
-                t.points.push({ x: p.car.position.x, z: p.car.position.z });
-                if (t.points.length > MAX_TRAIL) t.points.shift();
+            const dist = p.car.position.distanceTo(t.lastPos);
+            if (dist > TRAIL_DIST) {
+                const p1 = t.lastPos.clone();
+                const p2 = p.car.position.clone();
+                
+                const dx = p2.x - p1.x, dz = p2.z - p1.z;
+                const len = Math.sqrt(dx*dx + dz*dz);
+                const angle = Math.atan2(dx, dz);
+
+                const mesh = new THREE.Mesh(
+                    new THREE.BoxGeometry(TRAIL_W, TRAIL_H, len + 0.3),
+                    new THREE.MeshBasicMaterial({ color: t.color }) // Matériau plein
+                );
+                
+                mesh.position.set((p1.x + p2.x)/2, TRAIL_H/2, (p1.z + p2.z)/2);
+                mesh.rotation.y = angle;
+                mesh.userData.ownerId = id;
+                
+                _trailGroup.add(mesh);
+                t.meshes.push(mesh);
+                t.lastPos.copy(p2);
             }
 
             // --- COLLISIONS ---
-            let hit = false;
+            let dead = false;
+            let killerId = null;
 
-            // 1. Murs arène
-            const half = ARENA_SIZE / 2;
-            if (Math.abs(p.car.position.x) > half || Math.abs(p.car.position.z) > half) {
-                hit = true;
-            }
+            if (Math.abs(p.car.position.x) > ARENA_SIZE/2 || Math.abs(p.car.position.z) > ARENA_SIZE/2) dead = true;
 
-            // 2. Toutes les traces (soi-même et les autres)
-            for (const [otherId, otherT] of _trails) {
-                const pts = otherT.points;
-                const isSelf = (otherId === id);
-                // Si c'est notre propre trace, on ne teste pas les derniers points (grâce à GRACE_POINTS)
-                const checkUpTo = isSelf ? Math.max(0, pts.length - GRACE_POINTS) : pts.length;
-                
-                for (let i = 0; i < checkUpTo; i++) {
-                    const dx = p.car.position.x - pts[i].x;
-                    const dz = p.car.position.z - pts[i].z;
-                    if (dx * dx + dz * dz < HIT_DIST * HIT_DIST) {
-                        hit = true;
-                        // Optionnel : faire disparaître la trace touchée ? 
-                        // "La bande disparait une fois que le joueur l'a touché"
-                        otherT.points = [];
-                        otherT.mesh.count = 0;
-                        break;
-                    }
+            for (const mesh of _trailGroup.children) {
+                // Protection pour ne pas se tuer sur son propre cul
+                if (mesh.userData.ownerId === id && t.meshes.slice(-4).includes(mesh)) continue;
+
+                const dx = p.car.position.x - mesh.position.x;
+                const dz = p.car.position.z - mesh.position.z;
+                if (dx*dx + dz*dz < HIT_DIST * HIT_DIST) {
+                    dead = true;
+                    killerId = mesh.userData.ownerId;
+                    _clearTrail(killerId);
+                    break;
                 }
-                if (hit) break;
             }
 
-            if (hit) {
-                _resetPlayer(p, t);
-                t.active = false;
+            if (dead) {
+                if (killerId && killerId !== id) {
+                    const s = (_scores.get(killerId) || 0) + 1;
+                    _scores.set(killerId, s);
+                    setPlayerScore(killerId, s + " pts");
+                }
+                _clearTrail(id);
+                _resetPlayer(p);
             }
         }
-
-        // --- Rendu des traces ---
-        const pts = t.points;
-        t.mesh.count = Math.max(0, pts.length - 1);
-        for (let i = 0; i < pts.length - 1; i++) {
-            const ax = pts[i].x,   az = pts[i].z;
-            const bx = pts[i+1].x, bz = pts[i+1].z;
-            const mx = (ax + bx) / 2, mz = (az + bz) / 2;
-            const dx = bx - ax, dz = bz - az;
-            const len = Math.sqrt(dx*dx + dz*dz) || 0.01;
-            const ang = Math.atan2(dx, dz);
-            _mat4.makeRotationY(ang);
-            _mat4.setPosition(mx, TRAIL_H / 2, mz);
-            _mat4.multiply(new THREE.Matrix4().makeScale(1, 1, len + 0.1)); // Petit overlap pour boucher les trous
-            t.mesh.setMatrixAt(i, _mat4);
-        }
-        if (t.points.length > 1) t.mesh.instanceMatrix.needsUpdate = true;
     }
 }
 
 export function disposeTronMode() {
     if (_arena) { scene.remove(_arena); _arena = null; }
-    for (const t of _trails.values()) {
-        scene.remove(t.mesh);
-        t.mesh.geometry.dispose();
-        t.mesh.material.dispose();
+    if (_trailGroup) {
+        _trailGroup.children.forEach(m => {
+            m.geometry.dispose(); m.material.dispose();
+        });
+        scene.remove(_trailGroup);
+        _trailGroup = null;
     }
     _trails.clear();
     setCameraFollow();
