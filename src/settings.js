@@ -150,17 +150,19 @@ export function applyFps() {
 }
 
 // ── Frame limiter (60 FPS cap optionnel) ────────────────────────────────────
-const _FRAME_MS = 1000 / 60;
+const _FRAME_MS  = 1000 / 60;          // ~16.67ms
+const _FRAME_THR = _FRAME_MS - 1;      // ~15.67ms — tolérance anti-flottant
 let _lastFrameTime = 0;
 
 export function scheduleFrame(callback) {
     requestAnimationFrame(ts => {
         if (settings.limitFps) {
-            if (ts - _lastFrameTime < _FRAME_MS) {
+            if (ts - _lastFrameTime < _FRAME_THR) {
                 scheduleFrame(callback);
                 return;
             }
-            _lastFrameTime = ts;
+            // Drift correction : avancer de _FRAME_MS exact plutôt que ts brut
+            _lastFrameTime = _lastFrameTime === 0 ? ts : _lastFrameTime + _FRAME_MS;
         }
         callback();
     });

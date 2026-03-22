@@ -257,7 +257,7 @@ function _buildModalHTML() {
         <div class="stg-section-title">Gameplay</div>
         ${_slider('dayCycleDuration', 'Cycle jour/nuit (s)', 30, 180, 5)}
         ${_toggleHTML('showFps', 'Afficher FPS')}
-        ${_toggleHTML('limitFps', 'Limiter à 60 FPS')}
+        ${_toggleHTML('limitFps', 'Limiter à 60 FPS <small style="color:rgba(255,255,255,.3);font-size:10px">(utile sur écran 120Hz+)</small>')}
     </div>
 
     <button class="stg-reset" id="stg-reset">Réinitialiser</button>
