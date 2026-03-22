@@ -169,24 +169,30 @@ function _resolveMiniCollisions() {
     const CONTACT = CAR_HL * (1 + MINI_SCALE); // ~2.28 : somme des rayons approx
     for (const mc of _miniCars.values()) {
         for (const c of _cars) {
-            if (c.parkState === 'parked') continue;
             const dx = mc.x - c.x, dz = mc.z - c.z;
             const dist = Math.hypot(dx, dz);
             if (dist > CONTACT || dist < 0.001) continue;
             const nx = dx / dist, nz = dz / dist;
             const overlap = CONTACT - dist;
-            // Mini car expulsée, IA car légèrement repoussée
-            mc.x += nx * overlap * 0.85;
-            mc.z += nz * overlap * 0.85;
-            c.x  -= nx * overlap * 0.15;
-            c.z  -= nz * overlap * 0.15;
-            // Rebond mini car + légère perturbation IA
-            const vn = (mc.vx - c.vx) * nx + (mc.vz - c.vz) * nz;
+            const isParked = c.parkState === 'parked';
+            // Voiture garée = obstacle immobile (100% push sur mini), sinon 85/15
+            mc.x += nx * overlap * (isParked ? 1.0 : 0.85);
+            mc.z += nz * overlap * (isParked ? 1.0 : 0.85);
+            if (!isParked) {
+                c.x  -= nx * overlap * 0.15;
+                c.z  -= nz * overlap * 0.15;
+            }
+            // Rebond mini car + légère perturbation IA (pas sur garée)
+            const cvx = isParked ? 0 : c.vx;
+            const cvz = isParked ? 0 : c.vz;
+            const vn = (mc.vx - cvx) * nx + (mc.vz - cvz) * nz;
             if (vn < 0) {
                 mc.vx -= vn * 1.4 * nx;
                 mc.vz -= vn * 1.4 * nz;
-                c.vx  += vn * 0.15 * nx;
-                c.vz  += vn * 0.15 * nz;
+                if (!isParked) {
+                    c.vx  += vn * 0.15 * nx;
+                    c.vz  += vn * 0.15 * nz;
+                }
             }
         }
     }
@@ -1433,6 +1439,7 @@ function _loop() {
 
 const _v3 = new THREE.Vector3();
 function _projectToScreenX(wx, wz) {
+    _camera.updateMatrixWorld();
     _v3.set(wx, 0, wz);
     _v3.project(_camera);
     return (_v3.x * 0.5 + 0.5) * window.innerWidth;
