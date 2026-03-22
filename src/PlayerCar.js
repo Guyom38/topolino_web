@@ -47,7 +47,8 @@ export class PlayerCar {
 
         // ── Variante police ───────────────────────────────────────────────────
         this.isPolice  = false;
-        this.girophare = null;
+        this.aura   = null;
+        this.brakeMeshes = []; // Meshes des phares stop
 
         // ── Mode voleur de bagage ─────────────────────────────────────────────
         this.hasLuggage        = false;
@@ -191,6 +192,15 @@ export class PlayerCar {
         this.velocity.set(0, 0, 0);
         this.carSpeed = 0;
         this.verticalVelocity = 0;
+    }
+
+    setBrakeLights(active) {
+        const intensity = active ? 5.0 : 0.05;
+        this.brakeMeshes.forEach(m => {
+            if (m.material && m.material.emissive) {
+                m.material.emissiveIntensity = intensity;
+            }
+        });
     }
 
     // ── Nettoyage ─────────────────────────────────────────────────────────────

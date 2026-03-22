@@ -43,19 +43,12 @@ export async function loadCarForPlayer(player) {
 
         const n = child.name.toLowerCase();
 
-        // Stocker les pièces de bagage pour pouvoir les cacher/afficher
-        if (n.includes('bagage')) {
-            player.luggageMeshes.push(child);
-            // On peut optionnellement les cacher par défaut
-            // child.visible = false; 
-        }
-
+        // 1. Matériau de base
         const mat = (player.isPolice ? getPoliceMaterialForMesh(child.name) : null)
                  ?? getMaterialForMesh(child.name);
         if (mat) {
             child.material = mat;
         } else {
-            // Carrosserie : couleur propre au joueur
             const bodyMat = new THREE.MeshStandardMaterial({
                 color:     player.colorInt,
                 roughness: 0.35,
@@ -63,6 +56,23 @@ export async function loadCarForPlayer(player) {
             });
             bodyMat.userData.isBodyColor = true;
             child.material = bodyMat;
+        }
+
+        // 2. Gestion spécifique des feux stop (avec clone pour ne pas affecter les portières)
+        const isBrakePart = (n.includes('phares_arriere') || n.includes('lumineux_arriere')) 
+                            && !n.includes('portiere');
+        
+        if (isBrakePart) {
+            // CLONE impératif car matériaux partagés dans materials.js
+            child.material = child.material.clone();
+            child.material.emissive = new THREE.Color(0xff0000);
+            child.material.emissiveIntensity = 0.05;
+            player.brakeMeshes.push(child);
+        }
+
+        // Stocker les pièces de bagage pour pouvoir les cacher/afficher
+        if (n.includes('bagage')) {
+            player.luggageMeshes.push(child);
         }
 
         // Détection des roues

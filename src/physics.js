@@ -37,7 +37,14 @@ export function updatePhysics(p, terrainY, getY = undefined) {
     p.carSpeed  = THREE.MathUtils.clamp(p.carSpeed, -config.maxSpeed / 2, config.maxSpeed);
 
     // --- Ratio vitesse (utilisé pour drift & steering) ---
-    const speedRatio     = Math.abs(p.carSpeed) / config.maxSpeed;
+    const speedRatio = Math.abs(p.carSpeed) / config.maxSpeed;
+
+    // --- Gestion automatique des feux stop ---
+    const isBraking = (keys.down && p.carSpeed > 0.1) || 
+                      (keys.up && p.carSpeed < -0.1) || 
+                      (p.carSpeed < -0.1) ||
+                      (keys.handbrake);
+    if (p.setBrakeLights) p.setBrakeLights(isBraking);
     // Dérapage naturel à haute vitesse (la perte de grip augmente avec v²)
     const speedDrift     = speedRatio * speedRatio * 0.32;
     // Facteur virage : moins d'adhérence dans les virages pris vite

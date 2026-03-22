@@ -160,7 +160,8 @@ function _resolveAll() {
         for (let j = i + 1; j < n; j++) {
             // Ignorer les collisions avec les voitures garées ou en train de se ranger
             const pi = _cars[i].parkState, pj = _cars[j].parkState;
-            if (pi === 'parked' || pi === 'entering' || pj === 'parked' || pj === 'entering') continue;
+            if (pi === 'parked' || pi === 'reversing' || pi === 'leaving' ||
+                pj === 'parked' || pj === 'reversing' || pj === 'leaving') continue;
             _resolveOBB(_cars[i], _cars[j]);
         }
 }
@@ -620,10 +621,12 @@ export async function initTitleScene() {
             isPolice, road, dir, mainZ, overtakeZ,
             targetZ: mainZ, overtaking: false, _overtakeX: 0,
             // Parking (route du bas uniquement)
-            parkState: null,   // null | 'braking' | 'entering' | 'parked' | 'leaving'
+            parkState: null,   // null | 'braking' | 'reversing' | 'parked' | 'leaving'
             parkSpot: null,    // index dans PARK_SPOTS
             parkTimer: 0,
             parkDuration: 0,
+            _revT: 0, _revStartX: 0, _revStartZ: 0, // marche arrière bezier
+            _leaveT: 0,                              // sortie bezier
         };
         _cars.push(c);
         const idx   = road === 0 ? i : i - CARS_TOP;
@@ -640,7 +643,7 @@ export async function initTitleScene() {
             c.parkSpot     = PRE_SPOTS[preSpotIdx];
             c.parkDuration = PARK_DURATION_MIN + Math.random() * (PARK_DURATION_MAX - PARK_DURATION_MIN);
             c.parkTimer    = performance.now() - Math.random() * c.parkDuration; // timer déjà en cours
-            c.angle        = Math.PI; // face à gauche
+            c.angle        = -Math.PI / 2; // perpendiculaire, face vers Y3
             c.root.position.set(c.x, 0, c.z);
             c.root.rotation.y = c.angle;
         }
@@ -738,7 +741,7 @@ function _loop() {
             const BRAKE_DIST = 7;             // début de freinage
 
             // 1) Accélération vers la vitesse cible (pas pendant manœuvre parking)
-            const isParking = c.parkState === 'braking' || c.parkState === 'entering' || c.parkState === 'parked';
+            const isParking = c.parkState === 'braking' || c.parkState === 'reversing' || c.parkState === 'parked';
             if (!isParking && Math.abs(c.vx) < c.baseSpeed) {
                 c.vx += c.dir * THRUST;
             }
@@ -782,44 +785,72 @@ function _loop() {
                 const now = performance.now();
 
                 if (c.parkState === 'braking') {
-                    // ── Phase 1 : freiner sur Y3 (bloque le trafic derrière) ──
-                    c.targetZ = c.mainZ;   // reste sur Y3
-                    c.vx *= 0.93;          // freinage progressif
-                    // Quasi arrêtée → se ranger vers Y2
-                    if (Math.abs(c.vx) < MIN_SPEED * 0.8) {
-                        c.parkState = 'entering';
-                    }
-                } else if (c.parkState === 'entering') {
-                    // ── Phase 2 : glisser latéralement vers Y2, voiture bien droite ──
+                    // ── Phase 1 : freiner sur Y3, dépasser la place d'une demi-longueur ──
                     const spot = PARK_SPOTS[c.parkSpot];
-                    c.vx = 0; // arrêt complet en X
-                    const dzS = spot.z - c.z;
-                    c.vz = Math.sign(dzS) * Math.min(Math.abs(dzS) * 0.12, MIN_SPEED * 0.8);
-                    c.angle = c.dir > 0 ? 0 : Math.PI; // angle fixe
-                    if (Math.abs(dzS) < PARK_SNAP) {
-                        c.x = spot.x;
-                        c.z = spot.z;
+                    c.targetZ = c.mainZ;   // reste sur Y3
+                    c.vx *= 0.92;          // freinage progressif
+                    // Transition : a dépassé la place d'au moins CAR_HL ET quasi arrêté
+                    const passed = c.dir * (c.x - spot.x);
+                    if (passed > CAR_HL && Math.abs(c.vx) < MIN_SPEED * 0.5) {
+                        c.vx = 0; c.vz = 0;
+                        c.parkState  = 'reversing';
+                        c._revT      = 0;
+                        c._revStartX = c.x;
+                        c._revStartZ = c.z;
+                    }
+                } else if (c.parkState === 'reversing') {
+                    // ── Phase 2 : marche arrière en courbe bezier vers Y2 ────
+                    const spot = PARK_SPOTS[c.parkSpot];
+                    // Bezier quadratique : P0=(revStartX,Y3), P1=(spot.x,Y3), P2=(spot.x,Y2)
+                    const P0x = c._revStartX, P0z = c._revStartZ;
+                    const P1x = spot.x,       P1z = c.mainZ;
+                    const P2x = spot.x,       P2z = spot.z;
+                    c._revT = Math.min(c._revT + 0.007, 1.0);
+                    const t = c._revT, mt = 1 - t;
+                    c.x = mt*mt*P0x + 2*mt*t*P1x + t*t*P2x;
+                    c.z = mt*mt*P0z + 2*mt*t*P1z + t*t*P2z;
+                    c.vx = 0; c.vz = 0;
+                    // Tangente → orientation (marche arrière : +π pour que la caisse regarde vers Y3)
+                    const dBx = 2*mt*(P1x-P0x) + 2*t*(P2x-P1x);
+                    const dBz = 2*mt*(P1z-P0z) + 2*t*(P2z-P1z);
+                    c.angle = Math.atan2(-dBz, dBx) + Math.PI;
+                    if (t >= 1.0) {
+                        c.x = P2x; c.z = P2z;
                         c.vx = 0; c.vz = 0;
                         c.parkState    = 'parked';
                         c.parkDuration = PARK_DURATION_MIN + Math.random() * (PARK_DURATION_MAX - PARK_DURATION_MIN);
                         c.parkTimer    = now;
-                        c.angle        = c.dir > 0 ? 0 : Math.PI;
+                        c.angle        = -Math.PI / 2; // perpendiculaire, face vers Y3
                     }
                 } else if (c.parkState === 'parked') {
-                    // ── Phase 3 : garée, attendre 10s ────────────────────────
+                    // ── Phase 3 : garée ───────────────────────────────────────
                     c.vx = 0; c.vz = 0;
                     if (now - c.parkTimer > c.parkDuration) {
                         c.parkState = 'leaving';
+                        c._leaveT   = 0;
                     }
                 } else if (c.parkState === 'leaving') {
-                    // ── Phase 4 : quitter Y2, revenir sur Y3 ────────────────
-                    c.targetZ = c.mainZ;
-                    if (Math.abs(c.vx) < c.baseSpeed * 0.5) {
-                        c.vx += c.dir * THRUST * 0.5;
-                    }
-                    if (Math.abs(c.z - c.mainZ) < 0.5) {
+                    // ── Phase 4 : sortie en courbe bezier vers Y3 ────────────
+                    const spot = PARK_SPOTS[c.parkSpot];
+                    // Bezier : P0=(spot.x,Y2), P1=(spot.x,Y3), P2=(spot.x+dir*CAR_HL*4, Y3)
+                    const P0x = spot.x,                     P0z = spot.z;
+                    const P1x = spot.x,                     P1z = c.mainZ;
+                    const P2x = spot.x + c.dir * CAR_HL * 4, P2z = c.mainZ;
+                    c._leaveT = Math.min(c._leaveT + 0.006, 1.0);
+                    const t = c._leaveT, mt = 1 - t;
+                    c.x = mt*mt*P0x + 2*mt*t*P1x + t*t*P2x;
+                    c.z = mt*mt*P0z + 2*mt*t*P1z + t*t*P2z;
+                    c.vx = 0; c.vz = 0;
+                    // Tangente → orientation (marche avant)
+                    const dBx = 2*mt*(P1x-P0x) + 2*t*(P2x-P1x);
+                    const dBz = 2*mt*(P1z-P0z) + 2*t*(P2z-P1z);
+                    if (Math.hypot(dBx, dBz) > 0.001) c.angle = Math.atan2(-dBz, dBx);
+                    if (t >= 1.0) {
+                        c.x = P2x; c.z = P2z;
                         c.parkState = null;
                         c.parkSpot  = null;
+                        c._leaveT   = 0;
+                        c.vx = c.dir * c.baseSpeed * 0.5;
                     }
                 } else {
                     // ── Circulation normale sur Y3 ───────────────────────────
@@ -926,7 +957,7 @@ function _loop() {
         // ── Orientation (face la direction du mouvement, figée pendant parking) ──
         if (!pe) {
             const sp2 = Math.hypot(c.vx, c.vz);
-            const lockAngle = c.parkState === 'entering' || c.parkState === 'parked' || c.parkState === 'braking';
+            const lockAngle = c.parkState === 'reversing' || c.parkState === 'parked' || c.parkState === 'braking' || c.parkState === 'leaving';
             if (!lockAngle && sp2 > MIN_SPEED * 0.4) {
                 const target = Math.atan2(-c.vz, c.vx);
                 let da = target - c.angle;
