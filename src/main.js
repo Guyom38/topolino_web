@@ -20,6 +20,19 @@ function _anyCarReady() {
     return Array.from(players.values()).some(p => p.car);
 }
 
+// ── FPS counter global ──────────────────────────────────────────────────────
+const _fpsDiv = document.getElementById('fps-counter');
+let _fpsTime = 0, _fpsFrames = 0;
+function _updateFps() {
+    _fpsFrames++;
+    const now = performance.now();
+    if (now - _fpsTime > 1000) {
+        if (_fpsDiv) _fpsDiv.textContent = 'FPS: ' + Math.round(_fpsFrames * 1000 / (now - _fpsTime));
+        _fpsTime = now;
+        _fpsFrames = 0;
+    }
+}
+
 // ── Mode normal (conduite libre) ──────────────────────────────────────────────
 async function startDriveMode(shouldRun) {
     initUI();
@@ -31,6 +44,7 @@ async function startDriveMode(shouldRun) {
         if (shouldRun && !shouldRun()) return;
         requestAnimationFrame(animate);
         const now = performance.now();
+        _updateFps();
         pollGamepads();
 
         for (const p of players.values()) {
@@ -85,6 +99,7 @@ async function startParkingMode(shouldRun) {
         if (shouldRun && !shouldRun()) return;
         requestAnimationFrame(animate);
         const now = performance.now();
+        _updateFps();
         pollGamepads();
 
         // Physique sur terrain plat
@@ -129,24 +144,12 @@ async function startChaseMode(shouldRun) {
     refreshTerrain();
     initChaseRocks();
 
-    const fpsDiv = document.getElementById('fps-counter');
-    let lastTime = performance.now();
-    let frames   = 0;
-
     function animate() {
         if (shouldRun && !shouldRun()) return;
         requestAnimationFrame(animate);
         const now = performance.now();
+        _updateFps();
         pollGamepads();
-        
-        // --- FPS ---
-        frames++;
-        if (now > lastTime + 1000) {
-            const timeDiff = now - lastTime;
-            if (fpsDiv) fpsDiv.innerText = 'FPS: ' + Math.round((frames * 1000) / timeDiff);
-            lastTime = now;
-            frames = 0;
-        }
 
         for (const p of players.values()) {
             if (!p.car) continue;
@@ -231,6 +234,7 @@ async function startTronMode(shouldRun) {
         if (shouldRun && !shouldRun()) return;
         requestAnimationFrame(animate);
         const now = performance.now();
+        _updateFps();
         pollGamepads();
 
         for (const p of players.values()) {
@@ -268,6 +272,7 @@ async function startDerbyMode(shouldRun) {
         if (shouldRun && !shouldRun()) return;
         requestAnimationFrame(animate);
         const now = performance.now();
+        _updateFps();
         pollGamepads();
 
         if (isDerbyActive()) {
@@ -312,6 +317,7 @@ async function startBattleMode(shouldRun) {
         if (shouldRun && !shouldRun()) return;
         requestAnimationFrame(animate);
         const now = performance.now();
+        _updateFps();
         pollGamepads();
 
         for (const p of players.values()) {
@@ -364,6 +370,7 @@ async function startFootMode(shouldRun) {
         if (shouldRun && !shouldRun()) return;
         requestAnimationFrame(animate);
         const now = performance.now();
+        _updateFps();
         pollGamepads();
 
         for (const p of players.values()) {
@@ -404,6 +411,7 @@ async function startCircuitMode(shouldRun) {
         if (shouldRun && !shouldRun()) return;
         requestAnimationFrame(animate);
         const now  = performance.now();
+        _updateFps();
         const dt   = now - lastNow;
         lastNow    = now;
         pollGamepads();

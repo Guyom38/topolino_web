@@ -1119,12 +1119,21 @@ export async function initTitleScene() {
         .then(d => _createQRSign(d.server_url + '/mobile'))
         .catch(() => _createQRSign(window.location.origin + '/mobile'));
 
+    // ── Chargement FBX avec barre de progression ──
+    const loadBar = document.getElementById('loading-bar');
+    const loadOv  = document.getElementById('loading-overlay');
     let fbxTemplate;
     try {
         fbxTemplate = await new Promise((res, rej) =>
-            new FBXLoader().load('Asssets/topolino_low49k.fbx', res, null, rej)
+            new FBXLoader().load('Asssets/topolino_low49k.fbx', res, (xhr) => {
+                if (loadBar && xhr.total) {
+                    loadBar.style.width = Math.round(xhr.loaded / xhr.total * 100) + '%';
+                }
+            }, rej)
         );
     } catch (e) { console.warn('[TitleScene] FBX non chargé:', e); return; }
+    if (loadBar) loadBar.style.width = '100%';
+    if (loadOv) { loadOv.classList.add('done'); setTimeout(() => loadOv.remove(), 600); }
     _fbxTemplate = fbxTemplate; // conservé pour les mini-voitures manette
 
     const policeColor = parseInt(POLICE_COLOR.replace('#', ''), 16);
@@ -1310,9 +1319,24 @@ function _updateDayNight(now) {
     }
 }
 
+// ── FPS titre ────────────────────────────────────────────────────────────────
+let _titleFpsDiv   = null;
+let _titleFpsTime  = 0;
+let _titleFpsCount = 0;
+
 function _loop() {
     if (!_running) return;
     _animId = requestAnimationFrame(_loop);
+
+    // ── FPS ──────────────────────────────────────────────────────────────────
+    _titleFpsCount++;
+    const _now = performance.now();
+    if (_now - _titleFpsTime > 1000) {
+        if (!_titleFpsDiv) _titleFpsDiv = document.getElementById('title-fps');
+        if (_titleFpsDiv) _titleFpsDiv.textContent = 'FPS: ' + Math.round(_titleFpsCount * 1000 / (_now - _titleFpsTime));
+        _titleFpsTime  = _now;
+        _titleFpsCount = 0;
+    }
 
     // ── Sondage manettes ─────────────────────────────────────────────────────
     if (navigator.getGamepads) {
@@ -1828,6 +1852,12 @@ export function disposeTitleScene() {
     _running = false;
     if (_animId) { cancelAnimationFrame(_animId); _animId = null; }
     window.removeEventListener('resize', _onResize);
+
+    // Cacher FPS titre et loading
+    const fpsEl = document.getElementById('title-fps');
+    if (fpsEl) fpsEl.remove();
+    const loadEl = document.getElementById('loading-overlay');
+    if (loadEl) loadEl.remove();
 
     // Nettoyer écouteurs clavier
     if (_titleOnKeyDown) { document.removeEventListener('keydown', _titleOnKeyDown); _titleOnKeyDown = null; }
