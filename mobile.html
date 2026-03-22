@@ -979,10 +979,10 @@ function makeJoystick(baseEl, thumbEl, onUpdate) {
 }
 
 makeJoystick(document.getElementById('js-left-base'),  document.getElementById('js-left-thumb'),
-  (x, _) => { leftJx  = x; });
+  (_, y) => { rightJy = y; });
 
 makeJoystick(document.getElementById('js-right-base'), document.getElementById('js-right-thumb'),
-  (_, y) => { rightJy = y; });
+  (x, _) => { leftJx  = x; });
 
 window.addEventListener('orientationchange', () => {
   leftJx = 0; rightJy = 0;
