@@ -204,10 +204,27 @@ async function startChaseMode(shouldRun) {
 async function startTronMode(shouldRun) {
     const { initTronMode, updateTronMode, disposeTronMode } =
         await import('./modes/TronMode.js');
+    const { loadCarForPlayer: loadCar } = await import('./car.js');
+    const { createTrackSystem: mkTracks } = await import('./tracks.js');
+    const { createShadow: mkShadow } = await import('./shadow.js');
+    const { createAura: mkAura } = await import('./aura.js');
 
     initUI();
     startMusic();
     await initMultiplayer();
+
+    // Force-loader les voitures (le spawn différé ne marche pas en arène)
+    for (const p of players.values()) {
+        if (!p.car) {
+            await loadCar(p);
+            p.respawn(0, 0, 0);
+            p.tracks = mkTracks();
+            p.shadow = mkShadow();
+            p.aura   = mkAura();
+            p.createNameLabel();
+        }
+    }
+
     await initTronMode(players);
 
     function animate() {
@@ -239,7 +256,7 @@ async function startTronMode(shouldRun) {
 
 // ── Mode Derby ─────────────────────────────────────────────────────────────────
 async function startDerbyMode(shouldRun) {
-    const { initDerbyMode, updateDerbyMode, isDerbyActive } =
+    const { initDerbyMode, updateDerbyMode, isDerbyActive, getDuneHeight } =
         await import('./modes/DerbyMode.js');
 
     initUI();
@@ -256,7 +273,8 @@ async function startDerbyMode(shouldRun) {
         if (isDerbyActive()) {
             for (const p of players.values()) {
                 if (!p.car) continue;
-                updatePhysics(p, 0, () => 0);
+                const duneY = getDuneHeight(p.car.position.x, p.car.position.z);
+                updatePhysics(p, duneY, () => 0);
             }
             updateCollisions(players, [], 2.5);
         }
@@ -265,7 +283,9 @@ async function startDerbyMode(shouldRun) {
 
         for (const p of players.values()) {
             if (!p.car) continue;
-            if (p.shadow) p.shadow.update(p.car.position, p.carAngle, 0);
+            const duneY = getDuneHeight(p.car.position.x, p.car.position.z);
+            if (p.shadow) p.shadow.update(p.car.position, p.carAngle, duneY);
+            if (p.tracks) p.tracks.update(p);
             p.updateNameLabel();
         }
 

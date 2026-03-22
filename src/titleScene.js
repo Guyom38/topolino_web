@@ -680,7 +680,6 @@ class SmokeSystem {
 
 function _createQRSign(url) {
     if (typeof QRCode === 'undefined') return;
-    // QRCode.js doit être dans le DOM pour fonctionner
     const div = document.createElement('div');
     div.style.cssText = 'position:fixed;left:-9999px;top:0;pointer-events:none;';
     document.body.appendChild(div);
@@ -705,8 +704,7 @@ function _createQRSign(url) {
         const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide });
         _qrMesh = new THREE.Mesh(geo, mat);
         _qrMesh.rotation.x = -Math.PI / 2;
-        // Herbe droite du terre-plein, petite marge par rapport au bord visible (~±14 en X)
-        _qrMesh.position.set(11, 0.07, -0.9);
+        _qrMesh.position.set(11, 0.07, -0.74);
         _scene.add(_qrMesh);
     }, 400);
 }
@@ -1346,9 +1344,9 @@ export function disposeTitleScene() {
     // Nettoyer QR code
     if (_qrMesh) {
         _scene?.remove(_qrMesh);
-        _qrMesh.material.map?.dispose();
-        _qrMesh.material.dispose();
-        _qrMesh.geometry.dispose();
+        _qrMesh.material?.map?.dispose();
+        _qrMesh.material?.dispose();
+        _qrMesh.geometry?.dispose();
         _qrMesh = null;
     }
 
