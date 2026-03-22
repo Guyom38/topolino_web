@@ -13,7 +13,7 @@ const BODY_COLORS = [
 ];
 
 // ── Debug ─────────────────────────────────────────────────────────────────────
-const DEBUG_OBB = true;
+const DEBUG_OBB = false;
 
 // ── Paramètres scène ──────────────────────────────────────────────────────────
 const CAR_COUNT    = 22;
@@ -994,35 +994,38 @@ function _loop() {
                 }
             }
 
-            // 4) Freinage et distance de sécurité
+            // 4) Freinage et distance de sécurité (cascade : freine si devant freine)
             let _didBrake = false;
             if (closestCar) {
-                const isParking = closestCar.parkState === 'approaching' || closestCar.parkState === 'reversing';
-                const wantsOut  = closestCar._wantsLeave || closestCar.parkState === 'leaving';
-                const otherSp   = Math.abs(closestCar.vx);
+                const isParking  = closestCar.parkState === 'approaching' || closestCar.parkState === 'reversing';
+                const wantsOut   = closestCar._wantsLeave || closestCar.parkState === 'leaving';
+                const otherSp    = Math.abs(closestCar.vx);
+                const otherBase  = closestCar.baseSpeed || MAX_SPEED;
+                // L'autre est « lent » s'il roule à moins de 60% de sa vitesse de base
+                const otherSlow  = otherSp < otherBase * 0.6;
+                // Obstacle = manœuvre parking OU voiture elle-même en freinage
+                const isObstacle = isParking || wantsOut || otherSlow;
 
-                // Distances selon le contexte : manœuvre → grand gap, normal → petit
-                const stopGap  = isParking ? CAR_HL * 5 : wantsOut ? CAR_HL * 4 : SAFE_GAP;
-                const brakeDist = isParking ? stopGap + 8 : wantsOut ? stopGap + 6 : BRAKE_DIST;
+                const stopGap   = isParking ? CAR_HL * 5
+                                : (wantsOut || otherSlow) ? CAR_HL * 3.5
+                                : SAFE_GAP;
+                const brakeDist = isObstacle ? stopGap + 8 : BRAKE_DIST;
 
                 if (closestDist < brakeDist) {
                     if (closestDist < CAR_HL * 1.8) {
                         // Urgence : arrêt quasi immédiat
                         c.vx = c.dir * Math.min(Math.abs(c.vx) * 0.4, otherSp);
                     } else if (closestDist < stopGap) {
-                        // Dans la zone d'arrêt : freinage fort → vitesse quasi nulle
-                        if (isParking || wantsOut) {
-                            c.vx *= 0.82;
-                            // Arrêter complètement si très lent
-                            if (Math.abs(c.vx) < MIN_SPEED * 0.5) c.vx = 0;
-                        } else {
-                            c.vx *= 0.88;
-                        }
+                        // Zone d'arrêt : freinage fort
+                        c.vx *= 0.82;
+                        if (isObstacle && Math.abs(c.vx) < MIN_SPEED * 0.5) c.vx = 0;
                     } else {
-                        // Approche : ralentir progressivement
+                        // Approche : adapter sa vitesse à celle de devant
                         const ratio = (closestDist - stopGap) / (brakeDist - stopGap);
-                        const brk = 0.85 + ratio * 0.12; // 0.85 à 0.97
-                        c.vx *= brk;
+                        const targetSp = otherSp + (c.baseSpeed - otherSp) * ratio;
+                        if (Math.abs(c.vx) > targetSp) {
+                            c.vx = c.dir * targetSp;
+                        }
                     }
                     _didBrake = true;
                 }
