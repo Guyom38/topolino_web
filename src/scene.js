@@ -35,9 +35,10 @@ sun.target.position.set(0, 0, 0);
 scene.add(sun);
 scene.add(sun.target);
 
-// Resize
+// Resize — le pixel ratio est géré par settings.js via applyResolution()
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
+    // Utilise le pixel ratio courant du renderer (mis à jour par settings)
     renderer.setSize(window.innerWidth, window.innerHeight);
 });

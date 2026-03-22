@@ -1,5 +1,7 @@
 // ── Système Audio : Musique du titre et Radio aléatoire ──────────────────────
 
+import { settings } from './settings.js';
+
 const RADIO_MUSICS = [
     'Asssets/musics/radio_audiogreen-phonk-167055.mp3',
     'Asssets/musics/radio_lemonmusicstudio-beach-volleyball-116179.mp3',
@@ -13,6 +15,7 @@ const TITLE_MUSIC = 'Asssets/musics/title_xxxdolm-inspiring-motivation-music-456
 
 let _bgm = null;
 let _currentTrack = '';
+let _autoplayFn = null;  // référence au listener autoplay courant
 
 /**
  * Démarre la musique du titre
@@ -44,9 +47,17 @@ export function startRandomRadio() {
 export function stopMusic() {
     if (_bgm) {
         _bgm.pause();
+        _bgm.onended = null;
         _bgm = null;
         _currentTrack = '';
     }
+    // Retirer les listeners de secours autoplay qui pourraient relancer
+    // une ancienne piste après un stopMusic()
+    _clearAutoplayListeners();
+}
+
+export function setMusicVolume(v) {
+    if (_bgm) _bgm.volume = v;
 }
 
 function _play(src, loop) {
@@ -58,24 +69,39 @@ function _play(src, loop) {
     }
     
     _bgm.loop = loop;
-    _bgm.volume = 0.5;
+    _bgm.volume = settings.musicVolume;
     _currentTrack = src;
     
+    // Retirer l'ancien listener avant d'en créer un nouveau
+    _clearAutoplayListeners();
+
     const attemptPlay = () => {
-        _bgm.play().then(() => {
-            // Lecture réussie, on retire les écouteurs de secours
-            window.removeEventListener('click', attemptPlay);
-            window.removeEventListener('keydown', attemptPlay);
-            window.removeEventListener('touchstart', attemptPlay);
-        }).catch(e => {
-            console.log("[Audio] Attente interaction utilisateur...");
-        });
+        if (_bgm && _bgm.src.endsWith(src.split('/').pop())) {
+            _bgm.play().then(() => {
+                _clearAutoplayListeners();
+            }).catch(() => {
+                console.log("[Audio] Attente interaction utilisateur...");
+            });
+        } else {
+            // La piste a changé, retirer ce listener obsolète
+            _clearAutoplayListeners();
+        }
     };
 
+    _autoplayFn = attemptPlay;
     attemptPlay();
 
     // Au cas où, on s'attache aux événements d'interaction
     window.addEventListener('click', attemptPlay);
     window.addEventListener('keydown', attemptPlay);
     window.addEventListener('touchstart', attemptPlay);
+}
+
+function _clearAutoplayListeners() {
+    if (_autoplayFn) {
+        window.removeEventListener('click', _autoplayFn);
+        window.removeEventListener('keydown', _autoplayFn);
+        window.removeEventListener('touchstart', _autoplayFn);
+        _autoplayFn = null;
+    }
 }

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { scene } from './scene.js';
+import { settings } from './settings.js';
 
 // ── Système de fumée capot — petits nuages qui montent et disparaissent ────────
 
@@ -102,6 +103,7 @@ function _emit(player, now) {
 
 // ── Démarre l'émission de fumée depuis le capot d'un joueur ───────────────────
 export function startHoodSmoke(player) {
+    if (!settings.particles) return;
     _init();
     const now = performance.now();
     // Éviter les doublons : supprimer un émetteur existant pour ce joueur

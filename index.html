@@ -922,9 +922,10 @@ function _getAC() {
 function _playTick() {           // hover léger
     try {
         const ac = _getAC(), t = ac.currentTime;
+        const vol = window._sfxVolume !== undefined ? window._sfxVolume : 0.75;
         const o = ac.createOscillator(), g = ac.createGain();
         o.frequency.setValueAtTime(1100, t);
-        g.gain.setValueAtTime(0.06, t);
+        g.gain.setValueAtTime(0.06 * vol, t);
         g.gain.exponentialRampToValueAtTime(0.0001, t + 0.04);
         o.connect(g); g.connect(ac.destination);
         o.start(t); o.stop(t + 0.04);
@@ -933,11 +934,12 @@ function _playTick() {           // hover léger
 function _playClick() {          // clic de sélection
     try {
         const ac = _getAC(), t = ac.currentTime;
+        const vol = window._sfxVolume !== undefined ? window._sfxVolume : 0.75;
         const o = ac.createOscillator(), g = ac.createGain();
         o.type = 'sine';
         o.frequency.setValueAtTime(900, t);
         o.frequency.exponentialRampToValueAtTime(440, t + 0.12);
-        g.gain.setValueAtTime(0.18, t);
+        g.gain.setValueAtTime(0.18 * vol, t);
         g.gain.exponentialRampToValueAtTime(0.0001, t + 0.15);
         o.connect(g); g.connect(ac.destination);
         o.start(t); o.stop(t + 0.15);

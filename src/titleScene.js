@@ -3,6 +3,7 @@ import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { getMaterialForMesh, getPoliceMaterialForMesh, POLICE_COLOR } from './materials.js';
 import { addGirophare } from './car.js';
 import { renderer } from './scene.js';
+import { settings, scheduleFrame } from './settings.js';
 
 // ── Couleurs carrosserie ──────────────────────────────────────────────────────
 const BODY_COLORS = [
@@ -69,7 +70,7 @@ let _smokeTex    = null;
 let _sun       = null;
 let _fill      = null;
 let _ambient   = null;
-const DAY_CYCLE_DURATION = 60;  // durée d'un cycle complet en secondes
+// Durée lue depuis settings (modifiable en temps réel)
 
 // ── Lampadaires ──────────────────────────────────────────────────────────────
 const _streetLamps = [];  // { group, light, bulbMat }
@@ -1266,7 +1267,7 @@ function _updateDayNight(now) {
     if (!_sun) return;
     // t va de 0 à 1 sur un cycle complet (60s par défaut)
     // Décalage +0.75 pour commencer en pleine nuit (sunAngle ≈ 3π/2)
-    const t = ((now / 1000 / DAY_CYCLE_DURATION) + 0.75) % 1.0;
+    const t = ((now / 1000 / (settings.dayCycleDuration || 60)) + 0.75) % 1.0;
 
     // Phase : 0→0.4 jour, 0.4→0.5 coucher, 0.5→0.9 nuit, 0.9→1.0 lever
     // sunAngle : 0=lever(est), PI/2=zénith, PI=coucher(ouest)
@@ -1326,7 +1327,7 @@ let _titleFpsCount = 0;
 
 function _loop() {
     if (!_running) return;
-    _animId = requestAnimationFrame(_loop);
+    scheduleFrame(_loop);
 
     // ── FPS ──────────────────────────────────────────────────────────────────
     _titleFpsCount++;

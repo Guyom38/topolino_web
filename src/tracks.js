@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { config } from './config.js';
 import { scene } from './scene.js';
 import { isOnDirt, getHeightAt, getNormalAt } from './terrain.js';
+import { settings } from './settings.js';
 
 const VERT = `varying vec2 vUv;
     void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`;
@@ -26,6 +27,7 @@ export function createTrackSystem() {
     let frame = 0;
 
     function emit(p) {
+        if (!settings.particles) return;
         const { car, carSpeed, carAngle } = p;
         if (!car || Math.abs(carSpeed) < 0.03) return;
         if (!p.onGround) return;

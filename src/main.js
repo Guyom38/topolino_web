@@ -1,3 +1,5 @@
+import { loadSettings, applyAllSettings, settings, scheduleFrame } from './settings.js';
+import { initSettingsUI } from './settingsUI.js';
 import { scene, camera, renderer, sun } from './scene.js';
 import { updatePhysics } from './physics.js';
 import { updateCamera, updateChaseCamera } from './camera.js';
@@ -11,6 +13,11 @@ import { updateSmoke }  from './smoke.js';
 import { startTitleMusic, startRandomRadio, stopMusic } from './audio.js';
 import { updateOffscreenArrows, disposeOffscreenArrows } from './offscreen.js';
 import { initTitleScene, disposeTitleScene } from './titleScene.js';
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+loadSettings();
+applyAllSettings();
+initSettingsUI();
 
 // ── Détection du mode ─────────────────────────────────────────────────────────
 const MODE = new URLSearchParams(window.location.search).get('mode');
@@ -33,6 +40,9 @@ function _updateFps() {
     }
 }
 
+// ── Frame limiter — délégué à settings.js (scheduleFrame) ───────────────────
+const _scheduleFrame = scheduleFrame;
+
 // ── Mode normal (conduite libre) ──────────────────────────────────────────────
 async function startDriveMode(shouldRun) {
     initUI();
@@ -42,7 +52,7 @@ async function startDriveMode(shouldRun) {
 
     function animate() {
         if (shouldRun && !shouldRun()) return;
-        requestAnimationFrame(animate);
+        _scheduleFrame(animate);
         const now = performance.now();
         _updateFps();
         pollGamepads();
@@ -97,7 +107,7 @@ async function startParkingMode(shouldRun) {
 
     function animate() {
         if (shouldRun && !shouldRun()) return;
-        requestAnimationFrame(animate);
+        _scheduleFrame(animate);
         const now = performance.now();
         _updateFps();
         pollGamepads();
@@ -146,7 +156,7 @@ async function startChaseMode(shouldRun) {
 
     function animate() {
         if (shouldRun && !shouldRun()) return;
-        requestAnimationFrame(animate);
+        _scheduleFrame(animate);
         const now = performance.now();
         _updateFps();
         pollGamepads();
@@ -232,7 +242,7 @@ async function startTronMode(shouldRun) {
 
     function animate() {
         if (shouldRun && !shouldRun()) return;
-        requestAnimationFrame(animate);
+        _scheduleFrame(animate);
         const now = performance.now();
         _updateFps();
         pollGamepads();
@@ -270,7 +280,7 @@ async function startDerbyMode(shouldRun) {
 
     function animate() {
         if (shouldRun && !shouldRun()) return;
-        requestAnimationFrame(animate);
+        _scheduleFrame(animate);
         const now = performance.now();
         _updateFps();
         pollGamepads();
@@ -315,7 +325,7 @@ async function startBattleMode(shouldRun) {
 
     function animate() {
         if (shouldRun && !shouldRun()) return;
-        requestAnimationFrame(animate);
+        _scheduleFrame(animate);
         const now = performance.now();
         _updateFps();
         pollGamepads();
@@ -368,7 +378,7 @@ async function startFootMode(shouldRun) {
 
     function animate() {
         if (shouldRun && !shouldRun()) return;
-        requestAnimationFrame(animate);
+        _scheduleFrame(animate);
         const now = performance.now();
         _updateFps();
         pollGamepads();
@@ -409,7 +419,7 @@ async function startCircuitMode(shouldRun) {
 
     function animate() {
         if (shouldRun && !shouldRun()) return;
-        requestAnimationFrame(animate);
+        _scheduleFrame(animate);
         const now  = performance.now();
         _updateFps();
         const dt   = now - lastNow;
@@ -482,6 +492,10 @@ window._startGameMode = function(mode) {
 
 // Démarrage direct (F5 / lien avec ?mode=xxx)
 if (MODE) {
+    // Cacher le loading overlay (géré normalement par titleScene.js)
+    const _loadOv = document.getElementById('loading-overlay');
+    if (_loadOv) { _loadOv.classList.add('done'); setTimeout(() => _loadOv.remove(), 600); }
+
     renderer.domElement.style.display = 'block';
     const _gui = document.getElementById('game-ui');
     if (_gui) { _gui.classList.remove('hidden'); _gui.style.display = 'block'; }

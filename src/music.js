@@ -7,9 +7,12 @@ const TRACKS = [
     'Asssets/musics/qubesounds-sport-rock-trailer_emergence-95431.mp3',
 ];
 
+import { settings } from './settings.js';
+
 let _audio = null;
 
-export function startMusic(volume = 0.55) {
+export function startMusic(volume) {
+    if (volume === undefined) volume = settings.musicVolume;
     // Déjà en cours de lecture → rien à faire
     if (_audio && !_audio.paused) return;
 
@@ -21,6 +24,8 @@ export function startMusic(volume = 0.55) {
         _audio.volume = volume;
     }
 
+    _audio.volume = volume;
+
     _audio.play().catch(() => {
         // Autoplay bloqué : relancer au premier geste utilisateur
         const resume = () => {
@@ -31,4 +36,8 @@ export function startMusic(volume = 0.55) {
         document.addEventListener('pointerdown', resume, { passive: true, once: true });
         document.addEventListener('keydown',     resume, { once: true });
     });
+}
+
+export function setGameMusicVolume(v) {
+    if (_audio) _audio.volume = v;
 }

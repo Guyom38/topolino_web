@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { scene, camera } from '../scene.js';
 import { startHoodSmoke } from '../smoke.js';
+import { settings } from '../settings.js';
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 const ROAD_W         = 16;     // Largeur de route (unités monde)
@@ -795,7 +796,7 @@ export function updateCircuitMode(players, now, deltaMs) {
             // Jouer le son de départ synchronisé avec les feux
             if (_beepAudio) { _beepAudio.pause(); _beepAudio.currentTime = 0; }
             _beepAudio = new Audio(BEEP_SRC);
-            _beepAudio.volume = 0.75;
+            _beepAudio.volume = settings.sfxVolume;
             _beepAudio.play().catch(() => {});
         }
         for (const p of players.values()) { if (p.car) { p.carSpeed = 0; p.velocity.set(0,0,0); } }

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { scene } from './scene.js';
+import { settings } from './settings.js';
 
 // ── Système d'étincelles — grosses étoiles jaunes avec traîne de vitesse ──────
 // Couche 1 : Points (sprites étoile, grand, billboard)
@@ -113,6 +114,7 @@ function _init() {
 
 // ── Émet des étincelles ───────────────────────────────────────────────────────
 export function spawnSparks(cx, cy, cz, nx, nz, relV, count = 10) {
+    if (!settings.particles) return;
     _init();
     if (relV < 0.05) return;
 

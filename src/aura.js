@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { scene } from './scene.js';
+import { settings } from './settings.js';
 
 /**
  * Crée un cylindre d'aura très simple pour déboguer les erreurs de shader
@@ -16,10 +17,8 @@ export function createAura(colorHex = '#ffff00') {
             color: { value: new THREE.Color(colorHex) },
         },
         vertexShader: `
-            varying vec2 vUv;
             varying float vY;
             void main() {
-                vUv = uv;
                 vY = position.y;
                 gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
             }
@@ -27,7 +26,6 @@ export function createAura(colorHex = '#ffff00') {
         fragmentShader: `
             uniform float time;
             uniform vec3 color;
-            varying vec2 vUv;
             varying float vY;
             void main() {
                 float alpha = (1.0 - vY / 10.0) * 0.5;
@@ -47,6 +45,7 @@ export function createAura(colorHex = '#ffff00') {
     return {
         mesh,
         update(position, time) {
+            if (!settings.auras) { mesh.visible = false; return; }
             mesh.position.copy(position);
             material.uniforms.time.value = time * 0.001;
         },
