@@ -71,6 +71,10 @@ let _fill      = null;
 let _ambient   = null;
 const DAY_CYCLE_DURATION = 60;  // durée d'un cycle complet en secondes
 
+// ── Lampadaires ──────────────────────────────────────────────────────────────
+const _streetLamps = [];  // { group, light, bulbMat }
+let _nightFactor = 1;     // 0=jour, 1=nuit (mis à jour par _updateDayNight)
+
 // ── Contrôle joueurs sur la page de titre ────────────────────────────────────
 const _titlePlayerCars = new Map(); // id → { c, sprite, keys }
 const _TITLE_MOVE_KEYS = new Set(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','KeyA','KeyD','KeyW','KeyS']);
@@ -356,6 +360,28 @@ function _claimCar(id, name, color, keys) {
     _titlePlayerCars.set(id, { c, sprite, keys, color });
 }
 
+/** Spawn une mini-voiture police pour le joueur clavier */
+function _spawnKbMiniCar() {
+    if (_miniCars.has('kb') || !_scene || !_fbxTemplate) return;
+    const color    = POLICE_COLOR;
+    const colorInt = parseInt(color.replace('#', ''), 16);
+    const root = new THREE.Group();
+    const { group: carGroup } = _buildCar(_fbxTemplate, colorInt, true); // isPolice = true
+    root.add(carGroup);
+    // Girophare sur la mini-voiture
+    const giro = addGirophare(carGroup);
+    root.scale.setScalar(MINI_SCALE);
+    const startX = 0;
+    root.position.set(startX, 0, MINI_Z);
+    _scene.add(root);
+    const sprite = _createNameSprite('P1', color);
+    _miniCars.set('kb', {
+        root, x: startX, z: MINI_Z, color,
+        vx: 0, vz: 0, angle: Math.PI,
+        sprite, keys: _titleKbState, girophare: giro,
+    });
+}
+
 function _getPlayerEntry(c) {
     for (const v of _titlePlayerCars.values()) {
         if (v.c === c) return v;
@@ -452,11 +478,12 @@ function _buildCar(fbxTemplate, color, isPolice = false) {
         }
     });
 
+    // Forcer le calcul des matrices pour positionner les lumières
+    clone.updateMatrixWorld(true);
+
     // ── Créer les deux halos de phares avant (gauche & droite) ──
     const headlights = [];
     if (headlightMesh) {
-        // Forcer le calcul des matrices sans être dans la scène
-        clone.updateMatrixWorld(true);
         headlightMesh.geometry.computeBoundingBox();
         const hBox = headlightMesh.geometry.boundingBox;
         // Centre du mesh en espace local du clone
@@ -483,13 +510,47 @@ function _buildCar(fbxTemplate, color, isPolice = false) {
         }
     }
 
-    return { group: clone, brakeMeshes, reverseMeshes, headlightMesh, headlights };
+    // ── Créer les deux halos rouges des feux arrière (gauche & droite) ──
+    const taillights = [];
+    if (brakeMeshes.length > 0) {
+        // Utiliser le premier brakeMesh pour positionner les lumières
+        const bm = brakeMeshes[0];
+        bm.geometry.computeBoundingBox();
+        const bBox = bm.geometry.boundingBox;
+        const bCenter = new THREE.Vector3();
+        bBox.getCenter(bCenter);
+        bm.localToWorld(bCenter);
+        clone.worldToLocal(bCenter);
+        // Largeur du mesh pour séparer les deux feux
+        const bMax = new THREE.Vector3();
+        bm.localToWorld(bMax.copy(bBox.max));
+        clone.worldToLocal(bMax);
+        const bMin = new THREE.Vector3();
+        bm.localToWorld(bMin.copy(bBox.min));
+        clone.worldToLocal(bMin);
+        const bOffset = Math.max(Math.abs(bMax.x - bMin.x) * 0.28, 0.2);
+
+        for (const side of [-1, 1]) {
+            const pl = new THREE.PointLight(0xff2200, 0, 5, 2);
+            pl.position.set(bCenter.x + side * bOffset, bCenter.y + 0.05, bCenter.z + 0.15);
+            clone.add(pl);
+            taillights.push(pl);
+        }
+    }
+
+    return { group: clone, brakeMeshes, reverseMeshes, headlightMesh, headlights, taillights };
 }
 
 function _setBrakeLights(c, on) {
     for (const m of c.brakeMeshes) {
         m.material.emissive.setHex(on ? 0xff1100 : 0x550000);
         m.material.emissiveIntensity = on ? 9.0 : 0.05;
+    }
+    // Halos rouges au sol la nuit
+    if (c.taillights) {
+        for (const pl of c.taillights) {
+            pl.intensity = on ? _nightFactor * 3.0 : 0;
+        }
     }
 }
 function _setReverseLights(c, on) {
@@ -874,6 +935,137 @@ function _createRoads() {
     _roadMeshes.push(road2);
 }
 
+// ── Lampadaires ──────────────────────────────────────────────────────────────
+
+/** Texture procédurale pour le halo au sol : gradient radial + bruit */
+function _createHaloTexture() {
+    const S = 128;
+    const cv = document.createElement('canvas');
+    cv.width = S; cv.height = S;
+    const ctx = cv.getContext('2d');
+    const id = ctx.createImageData(S, S);
+    const d  = id.data;
+    const cx = S / 2, cy = S / 2;
+
+    // Bruit simple (hash)
+    const rng = (x, y) => {
+        const n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
+        return (n - Math.floor(n));
+    };
+
+    for (let y = 0; y < S; y++) {
+        for (let x = 0; x < S; x++) {
+            const dx = (x - cx) / cx, dy = (y - cy) / cy;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            // Gradient radial avec chute douce (gaussienne)
+            let alpha = Math.exp(-dist * dist * 3.2);
+            // Bord doux : fondu complet après r=0.85
+            alpha *= Math.max(0, 1 - Math.pow(dist / 0.92, 4));
+            // Bruit pour casser l'uniformité
+            const noise = rng(x * 0.8, y * 0.8) * 0.35 + 0.65;
+            alpha *= noise;
+            // Légère variation angulaire (caustics simulés)
+            const angle = Math.atan2(dy, dx);
+            alpha *= 0.85 + 0.15 * Math.sin(angle * 5 + dist * 12);
+
+            alpha = Math.max(0, Math.min(1, alpha));
+            const i = (y * S + x) * 4;
+            d[i]     = 255; // R
+            d[i + 1] = 248; // G (légèrement chaud)
+            d[i + 2] = 200; // B
+            d[i + 3] = (alpha * 255) | 0;
+        }
+    }
+    ctx.putImageData(id, 0, 0);
+    return new THREE.CanvasTexture(cv);
+}
+
+function _createStreetLights() {
+    const SPACING   = 14;       // espacement entre lampadaires
+    const POLE_H    = 3.8;      // hauteur totale du poteau
+    const Z_LINE    = (ROAD_TOP_Z + 6 + ROAD_BOT_Z - 4.2) / 2; // centre du terre-plein
+
+    // Matériaux partagés
+    const matPole = new THREE.MeshStandardMaterial({
+        color: 0x444444, roughness: 0.5, metalness: 0.7,
+    });
+    const matBase = new THREE.MeshStandardMaterial({
+        color: 0x333333, roughness: 0.4, metalness: 0.8,
+    });
+    const matBulb = new THREE.MeshStandardMaterial({
+        color: 0xffffee, emissive: new THREE.Color(0xffffcc),
+        emissiveIntensity: 0, roughness: 0.2, metalness: 0.1,
+    });
+
+    // Géométries partagées
+    const geoBase   = new THREE.CylinderGeometry(0.14, 0.18, 0.35, 8);
+    const geoPole   = new THREE.CylinderGeometry(0.045, 0.055, POLE_H - 0.35, 6);
+    const geoNeck   = new THREE.CylinderGeometry(0.07, 0.045, 0.25, 6);
+    const geoBulb   = new THREE.SphereGeometry(0.18, 10, 8);
+    const geoShade  = new THREE.CylinderGeometry(0.22, 0.28, 0.12, 10);
+
+    // Halo au sol : plane + texture procédurale bruitée
+    const geoHalo  = new THREE.PlaneGeometry(6, 6);
+    const haloTex  = _createHaloTexture();
+    haloTex.magFilter = THREE.LinearFilter;
+    haloTex.minFilter = THREE.LinearMipmapLinearFilter;
+
+    for (let x = -ROAD_HALF_LEN + 6; x <= ROAD_HALF_LEN - 6; x += SPACING) {
+        const grp = new THREE.Group();
+
+        // Socle épais
+        const base = new THREE.Mesh(geoBase, matBase);
+        base.position.y = 0.175;
+        base.castShadow = true;
+        grp.add(base);
+
+        // Tige
+        const pole = new THREE.Mesh(geoPole, matPole);
+        pole.position.y = 0.35 + (POLE_H - 0.35) / 2;
+        pole.castShadow = true;
+        grp.add(pole);
+
+        // Col (raccord entre tige et lampe)
+        const neck = new THREE.Mesh(geoNeck, matPole);
+        neck.position.y = POLE_H - 0.05;
+        grp.add(neck);
+
+        // Abat-jour / chapeau
+        const shade = new THREE.Mesh(geoShade, matBase);
+        shade.position.y = POLE_H + 0.08;
+        grp.add(shade);
+
+        // Ampoule (clone pour intensité indépendante)
+        const bulbMat = matBulb.clone();
+        const bulb = new THREE.Mesh(geoBulb, bulbMat);
+        bulb.position.y = POLE_H - 0.02;
+        grp.add(bulb);
+
+        // PointLight
+        const light = new THREE.PointLight(0xffffcc, 0, 8, 2);
+        light.position.y = POLE_H - 0.1;
+        grp.add(light);
+
+        // Halo au sol — texture bruitée, blending additif
+        const haloMat = new THREE.MeshBasicMaterial({
+            map: haloTex, transparent: true, opacity: 0,
+            depthWrite: false, blending: THREE.AdditiveBlending,
+        });
+        const halo = new THREE.Mesh(geoHalo, haloMat);
+        halo.rotation.x = -Math.PI / 2;
+        halo.position.y = 0.03;
+        grp.add(halo);
+
+        // Léger décalage aléatoire en Z pour un aspect naturel
+        const zOff = (Math.random() - 0.5) * 0.3;
+        grp.position.set(x, 0, Z_LINE + zOff);
+        _scene.add(grp);
+
+        _streetLamps.push({ group: grp, light, bulbMat, haloMat });
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 //  Init / Loop / Dispose
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -919,6 +1111,7 @@ export async function initTitleScene() {
 
     _createGrass();
     _createRoads();
+    _createStreetLights();
 
     // QR code à plat sur l'herbe (côté droit)
     fetch('/api/info')
@@ -941,7 +1134,7 @@ export async function initTitleScene() {
         const isPolice = (i % 7 === 0);
         const color    = isPolice ? policeColor : BODY_COLORS[i % BODY_COLORS.length];
         const root     = new THREE.Group();
-        const { group: carGroup, brakeMeshes, reverseMeshes, headlightMesh, headlights } = _buildCar(fbxTemplate, color, isPolice);
+        const { group: carGroup, brakeMeshes, reverseMeshes, headlightMesh, headlights, taillights } = _buildCar(fbxTemplate, color, isPolice);
         root.add(carGroup);
         if (DEBUG_OBB) _addDebugOBB(root, color);
         _scene.add(root);
@@ -976,6 +1169,7 @@ export async function initTitleScene() {
             _wantsLeave: false,                      // en attente de sortir du parking
             brakeMeshes, reverseMeshes,              // feux stop / recul
             headlightMesh, headlights,               // phares avant
+            taillights,                              // PointLights rouges arrière
             smoke: null,                             // SmokeSystem si garé > 30s
         };
         _cars.push(c);
@@ -1004,7 +1198,7 @@ export async function initTitleScene() {
         if (!_TITLE_MOVE_KEYS.has(e.code)) return;
         if (!_kbClaimed) {
             _kbClaimed = true;
-            _claimCar('kb', 'Joueur 1', _nextPlayerColor(), _titleKbState);
+            _spawnKbMiniCar();
         }
         if (e.code === 'ArrowLeft'  || e.code === 'KeyA') _titleKbState.left  = true;
         if (e.code === 'ArrowRight' || e.code === 'KeyD') _titleKbState.right = true;
@@ -1062,7 +1256,8 @@ const _tmpC      = new THREE.Color();
 function _updateDayNight(now) {
     if (!_sun) return;
     // t va de 0 à 1 sur un cycle complet (60s par défaut)
-    const t = (now / 1000 % DAY_CYCLE_DURATION) / DAY_CYCLE_DURATION;
+    // Décalage +0.75 pour commencer en pleine nuit (sunAngle ≈ 3π/2)
+    const t = ((now / 1000 / DAY_CYCLE_DURATION) + 0.75) % 1.0;
 
     // Phase : 0→0.4 jour, 0.4→0.5 coucher, 0.5→0.9 nuit, 0.9→1.0 lever
     // sunAngle : 0=lever(est), PI/2=zénith, PI=coucher(ouest)
@@ -1097,10 +1292,21 @@ function _updateDayNight(now) {
     _fill.intensity = THREE.MathUtils.lerp(0.05, 0.35, dayFactor);
     _fill.color.copy(_fillNight).lerp(_fillDay, dayFactor);
 
+    // Facteur nuit global (utilisé par les feux stop/recul)
+    _nightFactor = THREE.MathUtils.smoothstep(1 - dayFactor, 0.5, 0.8);
+
     // Phares avant : s'allument quand il fait sombre (dayFactor < 0.5)
-    const headlightIntensity = THREE.MathUtils.smoothstep(1 - dayFactor, 0.5, 0.8);
+    const headlightIntensity = _nightFactor;
     for (const c of _cars) {
         _setHeadlights(c, headlightIntensity);
+    }
+
+    // Lampadaires : s'allument la nuit avec halo au sol
+    const lampIntensity = THREE.MathUtils.smoothstep(1 - dayFactor, 0.4, 0.7);
+    for (const lamp of _streetLamps) {
+        lamp.light.intensity = lampIntensity * 2.5;
+        lamp.bulbMat.emissiveIntensity = lampIntensity * 5.0;
+        lamp.haloMat.opacity = lampIntensity * 0.45;
     }
 }
 
@@ -1526,6 +1732,7 @@ function _loop() {
         mc.root.rotation.y = mc.angle;
         mc.sprite.position.set(mc.x, 1.8, mc.z);
         _updateNameSprite(mc.sprite, mc.angle, mc.x, mc.z);
+        if (mc.girophare) mc.girophare.update(performance.now());
     }
 
     // ── Collisions OBB + mini-voitures ───────────────────────────────────
