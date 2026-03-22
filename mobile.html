@@ -1,556 +1,1025 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Topolino — Manette</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; touch-action: none;
-            user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
-        body { background: #0d0f18; color: #fff; font-family: 'Segoe UI', sans-serif;
-               overflow: hidden; width: 100vw; height: 100vh; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#090b12">
+<title>TOPOLINO</title>
 
-        #landscape, #portrait { display: none; width: 100vw; height: 100vh; }
-        @media (orientation: landscape) { #landscape { display: flex; } }
-        @media (orientation: portrait)  { #portrait  { display: flex; } }
+<script type="importmap">
+{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}
+</script>
 
-        /* ════════ PORTRAIT ════════ */
-        #portrait {
-            flex-direction: column; align-items: center;
-            background: radial-gradient(ellipse at center, #1a1a3e 0%, #0d0d1a 100%);
-            overflow-y: auto;
-        }
-        .step { display: none; flex-direction: column; align-items: center;
-                gap: 18px; padding: 28px 20px; width: 100%; max-width: 400px; }
-        .step.active { display: flex; }
-        .step h2 { font-size: 22px; font-weight: 700; text-align: center; }
+<style>
+/* ══ RESET ══════════════════════════════════════════════════════ */
+*{box-sizing:border-box;margin:0;padding:0;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:#090b12;color:#fff;font-family:'Arial Black','Arial Bold',Arial,sans-serif}
 
-        .cfg-block { width: 100%; }
-        .cfg-block label { display: block; font-size: 11px; opacity: 0.5; margin-bottom: 8px;
-                           text-transform: uppercase; letter-spacing: .06em; }
-        .cfg-block input[type="text"] {
-            width: 100%; padding: 13px 16px;
-            background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.18);
-            border-radius: 14px; color: white; font-size: 18px; outline: none;
-        }
-        #palette { display: flex; flex-wrap: wrap; gap: 10px; }
-        .swatch { width: 40px; height: 40px; border-radius: 50%; cursor: pointer;
-                  border: 3px solid transparent; transition: transform .1s, border-color .1s; }
-        .swatch.on { border-color: #fff; transform: scale(1.25); }
+/* ══ ORIENTATION ════════════════════════════════════════════════ */
+#portrait,#landscape{position:absolute;inset:0;display:none}
+@media(orientation:portrait) {#portrait {display:flex;flex-direction:column}}
+@media(orientation:landscape){#landscape{display:flex}}
 
-        .btn-primary {
-            width: 100%; padding: 15px;
-            background: linear-gradient(145deg, #7c3aed, #9b59b6);
-            border: none; border-radius: 16px;
-            color: white; font-size: 17px; font-weight: 700; cursor: pointer;
-        }
-        .btn-primary:active { filter: brightness(.8); }
-        .btn-secondary {
-            width: 100%; padding: 11px;
-            background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.18);
-            border-radius: 14px; color: rgba(255,255,255,0.65); font-size: 14px;
-            font-weight: 600; cursor: pointer;
-        }
-        #portrait-status { font-size: 13px; opacity: 0.4; text-align: center; }
+/* ══════════════════════════════════════════════════════════════
+   PORTRAIT — SÉLECTION VÉHICULE
+══════════════════════════════════════════════════════════════ */
+#portrait{background:#090b12;overflow:hidden}
 
-        /* Caméra */
-        #cam-container {
-            width: 190px; height: 190px; border-radius: 50%; overflow: hidden;
-            border: 4px solid rgba(255,255,255,0.28); position: relative; background: #111;
-        }
-        #cam-container video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
-        #cam-overlay {
-            position: absolute; inset: 0; border-radius: 50%;
-            background: rgba(0,0,0,0.45);
-            display: flex; align-items: center; justify-content: center; pointer-events: none;
-        }
-        #cam-overlay.hidden { display: none; }
-        #expr-label { font-size: 17px; font-weight: 700; text-align: center; }
-        #expr-hint  { font-size: 12px; opacity: 0.65; text-align: center; }
-        #btn-capture {
-            width: 66px; height: 66px; border-radius: 50%;
-            background: white; border: 4px solid rgba(255,255,255,0.35);
-            cursor: pointer; box-shadow: 0 0 0 3px rgba(255,255,255,0.25);
-        }
-        #btn-capture:active { transform: scale(0.9); }
-        #thumbs { display: flex; gap: 7px; flex-wrap: wrap; justify-content: center; }
-        .thumb-slot {
-            width: 46px; height: 46px; border-radius: 50%; overflow: hidden;
-            border: 2px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.04);
-            display: flex; align-items: center; justify-content: center; font-size: 17px;
-        }
-        .thumb-slot img { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
-        .thumb-slot.done   { border-color: #4caf50; }
-        .thumb-slot.active { border-color: #fff; box-shadow: 0 0 0 2px rgba(255,255,255,0.4); }
-        #cam-progress { font-size: 12px; opacity: 0.55; text-align: center; }
-        #cam-no-access {
-            font-size: 13px; opacity: 0.6; text-align: center; line-height: 1.7;
-            display: none; padding: 8px 12px;
-            background: rgba(255,100,0,0.12); border-radius: 10px;
-        }
+/* Bandeau header */
+#hdr{
+  flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;
+  padding:max(env(safe-area-inset-top,12px),12px) 18px 12px;
+  position:relative;z-index:10;
+  background:linear-gradient(180deg,rgba(0,0,0,0.88) 0%,transparent 100%);
+}
+#hdr-logo{
+  font-size:22px;font-weight:900;letter-spacing:5px;text-transform:uppercase;
+  background:linear-gradient(90deg,#ffffff 55%,#ff2233 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  filter:drop-shadow(0 0 10px rgba(255,34,51,0.4));
+}
+#btn-fs{
+  background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);
+  border-radius:10px;padding:8px 11px;color:#fff;cursor:pointer;font-size:17px;
+  touch-action:manipulation;line-height:1;
+}
+#btn-fs:active{background:rgba(255,255,255,0.18)}
 
-        /* ════════ LANDSCAPE : MANETTE ════════ */
-        #landscape {
-            align-items: stretch; justify-content: stretch;
-            background: #0d0f18; padding: 8px; gap: 8px;
-        }
+/* Aperçu 3D */
+#preview-wrap{
+  flex:1 1 0;position:relative;overflow:hidden;
+  touch-action:none;
+}
+#preview-canvas{display:block;width:100%;height:100%;touch-action:none}
 
-        /* Zone joystick (gauche) */
-        #js-zone {
-            flex: 0 0 auto;
-            width: 44vw; max-width: 260px;
-            display: flex; flex-direction: column;
-            align-items: center; justify-content: center; gap: 8px;
-        }
-        #js-label {
-            font-size: 10px; font-weight: 700; color: rgba(255,255,255,0.3);
-            letter-spacing: 2px; text-transform: uppercase;
-        }
-        #js-base {
-            position: relative;
-            width: min(44vw, 220px); height: min(44vw, 220px);
-            max-width: 220px; max-height: 220px;
-        }
-        #js-ring {
-            position: absolute; inset: 0; border-radius: 50%;
-            border: 2px solid rgba(255,255,255,0.1);
-            background: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.04), transparent 70%);
-        }
-        /* Indicateur direction (arc lumineux) */
-        #js-ring::after {
-            content: ''; position: absolute; inset: 6px; border-radius: 50%;
-            border: 2px solid transparent;
-        }
-        #js-cross {
-            position: absolute; inset: 0;
-            display: flex; align-items: center; justify-content: center;
-            pointer-events: none;
-        }
-        #js-cross::before {
-            content: ''; position: absolute;
-            width: 1px; height: 60%; background: rgba(255,255,255,0.06);
-        }
-        #js-cross::after {
-            content: ''; position: absolute;
-            width: 60%; height: 1px; background: rgba(255,255,255,0.06);
-        }
-        #js-thumb {
-            position: absolute;
-            width: 64px; height: 64px; border-radius: 50%;
-            background: radial-gradient(circle at 38% 35%, #5a7fff, #2244cc);
-            top: 50%; left: 50%; transform: translate(-50%, -50%);
-            box-shadow: 0 4px 18px rgba(60,100,255,0.5), 0 0 0 3px rgba(100,140,255,0.2);
-            transition: box-shadow .1s;
-            pointer-events: none;
-        }
-        #js-thumb.active {
-            box-shadow: 0 4px 24px rgba(60,100,255,0.8), 0 0 0 4px rgba(100,140,255,0.4);
-        }
+#preview-loading{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:16px;
+  background:#090b12;pointer-events:none;transition:opacity .5s;
+}
+#preview-loading.hidden{opacity:0}
+#preview-loading.gone{display:none}
+#preview-spinner{
+  width:40px;height:40px;border-radius:50%;
+  border:3px solid rgba(255,255,255,0.08);border-top-color:#ff2233;
+  animation:spin .75s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+#preview-loading .ld-txt{font-size:11px;letter-spacing:3px;opacity:0.4;font-family:'Segoe UI',sans-serif;font-weight:400}
 
-        /* Zone info centrale */
-        #info-zone {
-            flex: 1 1 0;
-            display: flex; flex-direction: column;
-            align-items: center; justify-content: center; gap: 6px;
-        }
-        #avatar-circle {
-            width: 52px; height: 52px; border-radius: 50%;
-            border: 3px solid #5a7fff; overflow: hidden; background: #333;
-        }
-        #avatar-circle img { width: 100%; height: 100%; object-fit: cover; }
-        #avatar-initial {
-            width: 100%; height: 100%;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 22px; font-weight: 900;
-        }
-        #info-name {
-            font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.8);
-            max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-            text-align: center;
-        }
-        #conn-dot {
-            width: 8px; height: 8px; border-radius: 50%; background: #c44;
-        }
-        #conn-dot.ok { background: #4c4; }
+/* Hint tactile */
+#preview-hint{
+  position:absolute;bottom:12px;left:50%;transform:translateX(-50%);
+  background:rgba(0,0,0,0.55);backdrop-filter:blur(4px);
+  padding:5px 14px;border-radius:30px;
+  font-size:11px;letter-spacing:1px;opacity:0.65;white-space:nowrap;
+  font-family:'Segoe UI',sans-serif;font-weight:400;pointer-events:none;
+  border:1px solid rgba(255,255,255,0.1);
+}
 
-        /* Zone boutons (droite) */
-        #btn-zone {
-            flex: 0 0 auto;
-            width: 44vw; max-width: 260px;
-            display: grid;
-            grid-template-rows: 1fr 1fr;
-            grid-template-columns: 1fr auto;
-            gap: 8px;
-            padding: 2px;
-        }
+/* Panneau config */
+#config-panel{
+  flex:0 0 auto;
+  padding:14px 16px max(env(safe-area-inset-bottom,14px),14px);
+  background:linear-gradient(0deg,rgba(5,6,12,0.99) 0%,rgba(9,11,18,0.96) 100%);
+  border-top:1px solid rgba(255,255,255,0.07);
+  display:flex;flex-direction:column;gap:10px;
+  position:relative;
+}
+/* Bande racing */
+#config-panel::before{
+  content:'';display:block;height:3px;border-radius:2px;margin-bottom:2px;
+  background:linear-gradient(90deg,transparent 0%,#ff2233 25%,#ffffff 50%,#ff2233 75%,transparent 100%);
+}
 
-        .game-btn {
-            border-radius: 16px; border: none;
-            font-size: 15px; font-weight: 900; letter-spacing: 1px;
-            color: white; cursor: pointer;
-            display: flex; flex-direction: column;
-            align-items: center; justify-content: center; gap: 4px;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.4);
-            -webkit-tap-highlight-color: transparent;
-            transition: filter .06s, transform .06s;
-        }
-        .game-btn:active, .game-btn.pressed {
-            filter: brightness(0.75); transform: scale(0.96);
-        }
-        .game-btn .btn-icon { font-size: 24px; line-height: 1; }
-        .game-btn .btn-text { font-size: 10px; letter-spacing: 2px; opacity: 0.85; }
+#name-row{display:flex;gap:8px;align-items:stretch}
+#inp-name{
+  flex:1;padding:12px 14px;
+  background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);
+  border-radius:12px;color:#fff;font-size:15px;font-weight:700;letter-spacing:2px;
+  outline:none;font-family:'Arial Black','Arial Bold',Arial,sans-serif;
+  -webkit-appearance:none;
+}
+#inp-name::placeholder{opacity:0.28;font-size:12px;letter-spacing:3px}
+#inp-name:focus{border-color:rgba(255,34,51,0.55);background:rgba(255,34,51,0.05)}
 
-        /* AVANCER — grande, colonne 1, ligne 1+2 */
-        #btn-go {
-            grid-row: 1 / 2; grid-column: 1 / 2;
-            background: linear-gradient(160deg, #22c55e, #16a34a);
-            box-shadow: 0 4px 20px rgba(34,197,94,0.35);
-        }
-        #btn-go.pressed { box-shadow: 0 2px 8px rgba(34,197,94,0.2); }
+#btn-color-open{
+  flex:0 0 52px;border-radius:12px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;font-size:22px;
+  background:rgba(255,255,255,0.07);border:2px solid rgba(255,255,255,0.14);
+  color:#fff;touch-action:manipulation;position:relative;overflow:hidden;
+}
+/* Halo couleur sélectionnée */
+#btn-color-open::after{
+  content:'';position:absolute;inset:0;border-radius:10px;
+  background:var(--sel-color,#e74c3c);opacity:0.28;pointer-events:none;
+}
+#btn-color-open:active{filter:brightness(.75)}
 
-        /* RECULER — petite, colonne 1, ligne 2 */
-        #btn-rev {
-            grid-row: 2 / 3; grid-column: 1 / 2;
-            background: linear-gradient(160deg, #f59e0b, #d97706);
-            box-shadow: 0 4px 16px rgba(245,158,11,0.3);
-        }
+/* Bouton primaire */
+.btn-primary{
+  width:100%;padding:14px 20px;border:none;cursor:pointer;
+  background:linear-gradient(135deg,#ff2233 0%,#c0000e 100%);
+  border-radius:13px;color:#fff;font-size:15px;font-weight:900;letter-spacing:3px;
+  touch-action:manipulation;
+  display:flex;align-items:center;justify-content:space-between;
+  box-shadow:0 4px 24px rgba(255,34,51,0.38),inset 0 1px 0 rgba(255,255,255,0.18);
+  position:relative;overflow:hidden;
+}
+.btn-primary::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(90deg,rgba(255,255,255,0.12) 0%,transparent 50%);
+}
+.btn-primary:active{filter:brightness(.8);transform:scale(.98)}
 
-        /* FREIN — carré, colonne 2, lignes 1+2 */
-        #btn-hb {
-            grid-row: 1 / 3; grid-column: 2 / 3;
-            width: min(22vw, 110px);
-            background: linear-gradient(160deg, #ef4444, #b91c1c);
-            box-shadow: 0 4px 20px rgba(239,68,68,0.35);
-            border-radius: 20px;
-        }
-        #btn-hb.pressed { box-shadow: 0 2px 8px rgba(239,68,68,0.2); }
-    </style>
+#portrait-status{
+  font-size:11px;letter-spacing:1px;opacity:0.4;text-align:center;
+  font-family:'Segoe UI',sans-serif;font-weight:400;min-height:13px;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   MODAL COULEUR
+══════════════════════════════════════════════════════════════ */
+#color-modal{
+  position:fixed;inset:0;z-index:300;
+  display:flex;align-items:flex-end;justify-content:center;
+  pointer-events:none;opacity:0;transition:opacity .22s ease;
+}
+#color-modal.open{pointer-events:all;opacity:1}
+
+#color-modal-bg{
+  position:absolute;inset:0;background:rgba(0,0,0,0.72);backdrop-filter:blur(8px);
+}
+#color-modal-panel{
+  position:relative;z-index:1;width:100%;max-width:500px;
+  background:linear-gradient(180deg,#141720 0%,#0d0f19 100%);
+  border-radius:22px 22px 0 0;
+  border-top:1px solid rgba(255,255,255,0.12);
+  border-left:1px solid rgba(255,255,255,0.06);
+  border-right:1px solid rgba(255,255,255,0.06);
+  padding:0 0 max(env(safe-area-inset-bottom,18px),18px);
+  transform:translateY(40px);transition:transform .26s cubic-bezier(.2,.8,.4,1);
+}
+#color-modal.open #color-modal-panel{transform:translateY(0)}
+
+/* Tirette */
+#color-modal-panel::before{
+  content:'';display:block;width:40px;height:4px;border-radius:2px;
+  background:rgba(255,255,255,0.2);margin:12px auto 0;
+}
+
+#color-modal-hdr{
+  display:flex;align-items:center;gap:10px;
+  padding:14px 18px 12px;border-bottom:1px solid rgba(255,255,255,0.07);
+}
+#color-preview-dot{
+  width:26px;height:26px;border-radius:50%;
+  background:var(--sel-color,#e74c3c);
+  border:2px solid rgba(255,255,255,0.25);flex:0 0 auto;
+  transition:background .15s;
+}
+#color-modal-hdr span{flex:1;font-size:12px;letter-spacing:3px;opacity:0.6}
+#btn-color-close{
+  background:rgba(255,255,255,0.09);border:1px solid rgba(255,255,255,0.15);
+  color:#fff;width:32px;height:32px;border-radius:50%;font-size:14px;
+  cursor:pointer;touch-action:manipulation;
+  display:flex;align-items:center;justify-content:center;
+}
+#btn-color-close:active{background:rgba(255,255,255,0.2)}
+
+/* Onglets */
+#color-tabs{display:flex;padding:12px 18px 8px;gap:8px}
+.ctab{
+  flex:1;padding:10px;cursor:pointer;touch-action:manipulation;
+  background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);
+  color:rgba(255,255,255,0.45);font-size:11px;letter-spacing:2px;
+  font-family:'Arial Black','Arial Bold',Arial,sans-serif;font-weight:900;
+  border-radius:10px;transition:all .15s;
+}
+.ctab:first-child{border-radius:10px 0 0 10px;border-radius:10px}
+.ctab.active{background:#ff2233;border-color:#ff2233;color:#fff;box-shadow:0 2px 12px rgba(255,34,51,0.4)}
+.ctab:active:not(.active){background:rgba(255,255,255,0.1)}
+
+.ctab-content{display:none;padding:8px 18px 12px}
+.ctab-content.active{display:block}
+
+/* Grille presets */
+#presets-grid{
+  display:grid;grid-template-columns:repeat(5,1fr);gap:10px;padding:4px 0;
+}
+.preset-swatch{
+  aspect-ratio:1;border-radius:50%;cursor:pointer;touch-action:manipulation;
+  border:3px solid transparent;
+  transition:transform .1s,border-color .1s,box-shadow .1s;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.25),0 2px 8px rgba(0,0,0,0.4);
+}
+.preset-swatch.on{
+  border-color:#fff;transform:scale(1.22);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.3),0 0 16px rgba(255,255,255,0.4);
+}
+.preset-swatch:active{transform:scale(1.1)}
+
+/* RGB natif */
+#rgb-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;padding:8px 0}
+#rgb-native{
+  width:100%;height:64px;border:none;border-radius:12px;
+  cursor:pointer;-webkit-appearance:none;background:none;padding:0;
+}
+#rgb-preview{
+  width:72px;height:72px;border-radius:50%;
+  border:3px solid rgba(255,255,255,0.28);
+  box-shadow:0 0 20px rgba(0,0,0,0.5);
+  transition:background .1s;
+}
+
+#btn-color-apply{margin:10px 18px 0;width:calc(100% - 36px)}
+
+/* ══════════════════════════════════════════════════════════════
+   LANDSCAPE — DOUBLE JOYSTICK
+══════════════════════════════════════════════════════════════ */
+#landscape{
+  background:#090b12;
+  align-items:stretch;justify-content:space-between;
+  position:relative;overflow:hidden;touch-action:none;
+}
+
+/* Fond carbone */
+#landscape::before{
+  content:'';position:absolute;inset:0;pointer-events:none;
+  background:
+    repeating-linear-gradient(0deg, transparent,transparent 18px,rgba(255,255,255,.013) 18px,rgba(255,255,255,.013) 19px),
+    repeating-linear-gradient(90deg,transparent,transparent 18px,rgba(255,255,255,.013) 18px,rgba(255,255,255,.013) 19px);
+}
+
+/* Bande déco top */
+#landscape::after{
+  content:'';position:absolute;top:0;left:0;right:0;height:3px;pointer-events:none;
+  background:linear-gradient(90deg,transparent 0%,#ff2233 20%,#ffffff 50%,#ff2233 80%,transparent 100%);
+}
+
+/* ── Zones joystick ── */
+.js-zone{
+  flex:0 0 auto;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  width:44vw;max-width:250px;gap:6px;
+  padding:max(env(safe-area-inset-top,6px),6px) 8px max(env(safe-area-inset-bottom,6px),6px);
+}
+#js-left-zone{padding-left:max(env(safe-area-inset-left,8px),8px)}
+#js-right-zone{padding-right:max(env(safe-area-inset-right,8px),8px)}
+
+.js-label{
+  font-size:9px;letter-spacing:3px;opacity:0.3;font-weight:900;
+}
+
+.js-base{
+  position:relative;touch-action:none;
+  width:min(42vw,200px);height:min(42vw,200px);
+}
+
+/* Anneau */
+.js-ring{
+  position:absolute;inset:0;border-radius:50%;
+  border:2px solid rgba(255,255,255,0.06);
+  background:radial-gradient(circle at 50% 50%,rgba(255,255,255,0.025) 0%,transparent 65%);
+}
+/* Graduations */
+.js-ring::before{
+  content:'';position:absolute;inset:10%;border-radius:50%;
+  border:1px dashed rgba(255,255,255,0.04);
+}
+.js-ring::after{
+  content:'';position:absolute;inset:26%;border-radius:50%;
+  border:1px solid rgba(255,255,255,0.03);
+}
+
+/* Flèches guide */
+.js-arrows{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:space-between;
+  padding:0 14px;pointer-events:none;font-size:13px;opacity:0.1;
+}
+.js-arrows-tb{
+  flex-direction:column;justify-content:space-between;
+  align-items:center;padding:14px 0;
+}
+
+/* Pouce */
+.js-thumb{
+  position:absolute;
+  width:68px;height:68px;border-radius:50%;
+  top:50%;left:50%;transform:translate(-50%,-50%);
+  pointer-events:none;
+}
+
+/* Joystick gauche — bleu direction */
+#js-left-thumb{
+  background:radial-gradient(circle at 34% 30%,#6688ff,#2244cc);
+  box-shadow:0 4px 20px rgba(60,100,255,0.45),0 0 0 3px rgba(80,120,255,0.18),
+             inset 0 1px 0 rgba(255,255,255,0.25);
+}
+#js-left-thumb.active{
+  box-shadow:0 4px 28px rgba(60,100,255,0.85),0 0 0 5px rgba(80,120,255,0.38),
+             inset 0 1px 0 rgba(255,255,255,0.28);
+}
+
+/* Joystick droit — vert/rouge moteur */
+#js-right-thumb{
+  background:radial-gradient(circle at 34% 30%,#55dd88,#1a8844);
+  box-shadow:0 4px 20px rgba(40,180,100,0.45),0 0 0 3px rgba(60,200,120,0.18),
+             inset 0 1px 0 rgba(255,255,255,0.25);
+}
+#js-right-thumb.active.fwd{
+  background:radial-gradient(circle at 34% 30%,#66ffaa,#22cc66);
+  box-shadow:0 4px 30px rgba(50,230,130,0.9),0 0 0 6px rgba(60,255,130,0.35),
+             inset 0 1px 0 rgba(255,255,255,0.3);
+}
+#js-right-thumb.active.rev{
+  background:radial-gradient(circle at 34% 30%,#ff8833,#cc2200);
+  box-shadow:0 4px 30px rgba(255,100,30,0.9),0 0 0 6px rgba(255,120,50,0.35),
+             inset 0 1px 0 rgba(255,255,255,0.28);
+}
+
+/* ── Centre HUD ── */
+#center-panel{
+  flex:1 1 0;min-width:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:8px;
+  padding:0 4px;
+}
+
+/* Grand T décoratif */
+#center-t{
+  font-size:clamp(28px,6vw,50px);font-weight:900;letter-spacing:2px;
+  background:linear-gradient(180deg,rgba(255,255,255,0.9) 0%,rgba(255,255,255,0.2) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  line-height:1;
+}
+
+/* Avatar */
+#hud-avatar{
+  width:44px;height:44px;border-radius:50%;
+  border:2px solid rgba(255,255,255,0.18);
+  background:#1a1a2e;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;
+  font-size:18px;font-weight:900;
+  transition:border-color .3s;
+}
+
+#hud-name{
+  font-size:10px;letter-spacing:2px;opacity:0.65;
+  max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  text-align:center;
+}
+
+#conn-status{display:flex;align-items:center;gap:5px}
+#conn-dot{
+  width:7px;height:7px;border-radius:50%;
+  background:#883333;box-shadow:0 0 5px #883333;
+  transition:background .3s,box-shadow .3s;
+}
+#conn-dot.ok{background:#33cc77;box-shadow:0 0 8px #33cc77}
+#conn-label{font-size:8px;letter-spacing:2px;opacity:0.45}
+
+/* Indicateur moteur (barre verticale centre) */
+#throttle-bar-wrap{
+  width:5px;height:50px;border-radius:3px;
+  background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);
+  position:relative;overflow:hidden;
+}
+#throttle-bar{
+  position:absolute;bottom:50%;left:0;right:0;height:0;
+  border-radius:3px;transition:height .05s,background .1s;
+}
+</style>
 </head>
 <body>
 
-<!-- ════════ PORTRAIT ════════ -->
+<!-- ════════ PORTRAIT : SÉLECTION VÉHICULE ════════ -->
 <div id="portrait">
 
-    <div class="step active" id="step-config">
-        <h2>🚗 Topolino</h2>
-        <div class="cfg-block">
-            <label>Votre nom</label>
-            <input type="text" id="inp-name" placeholder="Joueur" maxlength="20" autocomplete="off" autocorrect="off">
-        </div>
-        <div class="cfg-block">
-            <label>Couleur du véhicule</label>
-            <div id="palette"></div>
-        </div>
-        <button class="btn-primary" id="btn-next">📸 Capturer mes expressions →</button>
-        <button class="btn-secondary" id="btn-skip-all">Rejoindre directement →</button>
-        <div id="portrait-status"></div>
-    </div>
+  <div id="hdr">
+    <span id="hdr-logo">TOPOLINO</span>
+    <button id="btn-fs" title="Plein écran">⛶</button>
+  </div>
 
-    <div class="step" id="step-camera">
-        <h2 id="expr-title">📸 Expression 1 / 6</h2>
-        <div id="cam-container">
-            <video id="cam-video" autoplay playsinline muted></video>
-            <div id="cam-overlay">
-                <div style="text-align:center;padding:16px">
-                    <div style="font-size:30px">📷</div>
-                    <div style="font-size:13px;margin-top:6px">Démarrage caméra…</div>
-                </div>
-            </div>
-        </div>
-        <div id="expr-label">—</div>
-        <div id="expr-hint">—</div>
-        <button id="btn-capture" title="Capturer"></button>
-        <div id="thumbs"></div>
-        <div id="cam-progress">0 / 6 capturées</div>
-        <div id="cam-no-access">
-            ⚠️ Caméra inaccessible (HTTP).<br>
-            Chrome Android : <b>chrome://flags</b><br>
-            → <i>Insecure origins treated as secure</i><br>
-            → Ajouter <b>http://192.168.1.50:5000</b>
-        </div>
-        <button class="btn-primary"   id="btn-join" style="display:none">Rejoindre la partie →</button>
-        <button class="btn-secondary" id="btn-skip-cam">Passer sans photo</button>
+  <div id="preview-wrap">
+    <canvas id="preview-canvas"></canvas>
+    <div id="preview-loading">
+      <div id="preview-spinner"></div>
+      <div class="ld-txt">CHARGEMENT</div>
     </div>
+    <div id="preview-hint">↔ Glisser · 🤏 Pincer pour zoomer</div>
+  </div>
+
+  <div id="config-panel">
+    <div id="name-row">
+      <input type="text" id="inp-name" placeholder="VOTRE NOM" maxlength="20"
+             autocomplete="off" autocorrect="off" autocapitalize="characters">
+      <button id="btn-color-open" title="Couleur véhicule">🎨</button>
+    </div>
+    <button class="btn-primary" id="btn-join">
+      <span>REJOINDRE</span>
+      <span>→</span>
+    </button>
+    <div id="portrait-status"></div>
+  </div>
 
 </div>
 
-<!-- ════════ LANDSCAPE : MANETTE ════════ -->
+<!-- ════════ MODAL COULEUR ════════ -->
+<div id="color-modal">
+  <div id="color-modal-bg"></div>
+  <div id="color-modal-panel">
+    <div id="color-modal-hdr">
+      <div id="color-preview-dot"></div>
+      <span>COULEUR DU VÉHICULE</span>
+      <button id="btn-color-close">✕</button>
+    </div>
+    <div id="color-tabs">
+      <button class="ctab active" data-tab="presets">PRESETS</button>
+      <button class="ctab" data-tab="rgb">RGB</button>
+    </div>
+    <div id="ctab-presets" class="ctab-content active">
+      <div id="presets-grid"></div>
+    </div>
+    <div id="ctab-rgb" class="ctab-content">
+      <div id="rgb-wrap">
+        <input type="color" id="rgb-native" value="#e74c3c">
+        <div id="rgb-preview"></div>
+      </div>
+    </div>
+    <button class="btn-primary" id="btn-color-apply">
+      <span>APPLIQUER</span><span>✓</span>
+    </button>
+  </div>
+</div>
+
+<!-- ════════ LANDSCAPE : DOUBLE JOYSTICK ════════ -->
 <div id="landscape">
 
-    <!-- Joystick (direction) -->
-    <div id="js-zone">
-        <div id="js-label">DIRECTION</div>
-        <div id="js-base">
-            <div id="js-ring"></div>
-            <div id="js-cross"></div>
-            <div id="js-thumb"></div>
-        </div>
+  <!-- Joystick gauche — DIRECTION -->
+  <div class="js-zone" id="js-left-zone">
+    <div class="js-label">DIRECTION</div>
+    <div id="js-left-base" class="js-base">
+      <div class="js-ring"></div>
+      <div class="js-arrows"><span>◀</span><span>▶</span></div>
+      <div id="js-left-thumb" class="js-thumb"></div>
     </div>
+  </div>
 
-    <!-- Avatar + infos -->
-    <div id="info-zone">
-        <div id="avatar-circle"><div id="avatar-initial">?</div></div>
-        <div id="info-name">—</div>
-        <div id="conn-dot"></div>
+  <!-- Centre HUD -->
+  <div id="center-panel">
+    <div id="center-t">T</div>
+    <div id="hud-avatar"><span id="hud-initial">?</span></div>
+    <div id="hud-name">—</div>
+    <div id="throttle-bar-wrap"><div id="throttle-bar"></div></div>
+    <div id="conn-status">
+      <div id="conn-dot"></div>
+      <span id="conn-label">HORS LIGNE</span>
     </div>
+  </div>
 
-    <!-- Boutons -->
-    <div id="btn-zone">
-        <button class="game-btn" id="btn-go">
-            <span class="btn-icon">▲</span>
-            <span class="btn-text">AVANCER</span>
-        </button>
-        <button class="game-btn" id="btn-rev">
-            <span class="btn-icon">▼</span>
-            <span class="btn-text">RECULER</span>
-        </button>
-        <button class="game-btn" id="btn-hb">
-            <span class="btn-icon">🅿</span>
-            <span class="btn-text">FREIN</span>
-        </button>
+  <!-- Joystick droit — MOTEUR -->
+  <div class="js-zone" id="js-right-zone">
+    <div class="js-label">MOTEUR</div>
+    <div id="js-right-base" class="js-base">
+      <div class="js-ring"></div>
+      <div class="js-arrows js-arrows-tb"><span>▲</span><span>▼</span></div>
+      <div id="js-right-thumb" class="js-thumb"></div>
     </div>
+  </div>
 
 </div>
 
 <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
-<script>
-const COLORS = [
-    '#e74c3c','#e67e22','#f1c40f','#2ecc71','#1abc9c',
-    '#3498db','#9b59b6','#e91e63','#ff5722','#00bcd4',
-    '#8bc34a','#ff9800','#ecf0f1','#95a5a6','#ffffff','#34495e'
+<script type="module">
+import * as THREE from 'three';
+import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+
+// ════════════════════════════════════════════════════════════════
+// ÉTAT GLOBAL
+// ════════════════════════════════════════════════════════════════
+let selColor     = '#CC3322';   // couleur véhicule validée
+let pendingColor = selColor;    // couleur en cours dans le modal
+
+// ════════════════════════════════════════════════════════════════
+// APERÇU THREE.JS
+// ════════════════════════════════════════════════════════════════
+const canvas = document.getElementById('preview-canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setClearColor(0x090b12);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.3;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x090b12, 0.04);
+
+// Lumières
+const ambLight = new THREE.AmbientLight(0x8899cc, 1.4);
+scene.add(ambLight);
+
+const sun = new THREE.DirectionalLight(0xfff4e0, 3.5);
+sun.position.set(5, 10, 6);
+scene.add(sun);
+
+const rim = new THREE.DirectionalLight(0xff2233, 1.4);
+rim.position.set(-6, 2, -5);
+scene.add(rim);
+
+const fill = new THREE.DirectionalLight(0x4466ff, 0.6);
+fill.position.set(0, -4, 8);
+scene.add(fill);
+
+// Sol réflecteur
+const floorMat = new THREE.MeshStandardMaterial({
+  color: 0x0e1018, roughness: 0.12, metalness: 0.7
+});
+const floor = new THREE.Mesh(new THREE.CircleGeometry(7, 64), floorMat);
+floor.rotation.x = -Math.PI / 2;
+floor.position.y = -0.02;
+scene.add(floor);
+
+// Anneau déco
+const ringGeo = new THREE.TorusGeometry(3.2, 0.015, 8, 100);
+const ringMat = new THREE.MeshStandardMaterial({ color: 0xff2233, emissive: 0xff0000, emissiveIntensity: 0.5 });
+const ring = new THREE.Mesh(ringGeo, ringMat);
+ring.rotation.x = -Math.PI / 2;
+ring.position.y = -0.01;
+scene.add(ring);
+
+// Caméra
+const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
+let camTheta = 0;        // angle horizontal
+let camPhi   = 0.28;     // angle vertical (rad, 0=horizontal)
+let camDist  = 6.5;
+const CAM_DIST_MIN = 3.0, CAM_DIST_MAX = 11;
+const CAM_TARGET = new THREE.Vector3(0, 0.7, 0);
+
+function updateCamera() {
+  camera.position.x = camDist * Math.cos(camPhi) * Math.sin(camTheta);
+  camera.position.y = camDist * Math.sin(camPhi) + 0.7;
+  camera.position.z = camDist * Math.cos(camPhi) * Math.cos(camTheta);
+  camera.lookAt(CAM_TARGET);
+}
+updateCamera();
+
+// Groupe de rotation du véhicule
+const carGroup = new THREE.Group();
+scene.add(carGroup);
+
+// ── Matériaux preview (reproduit materials.js) ──────────────────
+const enjolivMeshes = new Set(['z_roue_arriere_droite_jante_int','z_roue_arriere_gauche_jante_int','z_roue_avant_droite_jante_int','z_roue_avant_gauche_jante_int','lumineux_avant','lumineux_avant_001']);
+const greyMeshes    = new Set(['feux_avant','feux_avant_001','feux_avant_spot','logo_avant_fiat','logo_arriere_fiat','parchoque_arriere','parchoque_avant','roue_avant_droite_axe','roue_avant_droite_enjoliver','roue_avant_gauche_axes','roue_avant_gauche_enjoliver','roue_arriere_gauche_axe','roue_arriere_gauche_enjoliver','roue_arriere_droite_axe','roue_arriere_droite_enjoliver','support_bagage','phares_arriere_stop_001','phares_arriere_stop_002','phares_arrieres']);
+const darkMeshes    = new Set(['z_support_bagage_bloc','z_support_bagage_bloc_001','bas_de_caisse','cache_moteur','essuie_glace','interieur_habitacle','roue_arriere_droite_jante_ext','roue_arriere_droite_pneu','roue_arriere_gauche_jante_ext','roue_arriere_gauche_pneu','roue_avant_droite_jante_ext','roue_avant_droite_pneu','roue_avant_gauche_jante_ext','roue_avant_gauche_pneu','z_interieur']);
+const toitMeshes    = new Set(['y_carrosserie_arriere','y_carrosserie_arriere_001','y_carrosserie_avant','y_carrosserie_avant_001','y_carrosserie_laterales','y_carrosserie_portieres','y_carrosserie_retros','y_carrosserie_toit','y_carrosserie_toit_001']);
+const rougeMeshes   = new Set(['lumineux_arriere_parchoque','phares_arriere_stop','italie_rouge','italie_rouge_001','lumineux_plaque','lumineux_portiere_droite','lumineux_portiere_gauche']);
+const vitreMeshes   = new Set(['y_carrosserie_vitres_laterales','feux_avant_vitres','vitre_arriere','vitre_avant','vitre_toit','vitres_laterales','vitres_portieres']);
+const blancMeshes   = new Set(['italie_blanc','italie_blanc_001']);
+const vertMeshes    = new Set(['italie_vert','italie_vert_001']);
+const leatherMeshes = new Set(['bagage','bagage_sangles','bagage_ceinture']);
+const fabricMeshes  = new Set(['bagage_001']);
+
+const matEnjo  = new THREE.MeshStandardMaterial({ color:0xD8D8D8, roughness:0.25, metalness:0.50 });
+const matGris  = new THREE.MeshStandardMaterial({ color:0x8A8A8A, roughness:0.30, metalness:0.65 });
+const matDark  = new THREE.MeshStandardMaterial({ color:0x3A3A3A, roughness:0.40, metalness:0.55 });
+const matToit  = new THREE.MeshStandardMaterial({ color:0x0F1520, roughness:0.60, metalness:0.10 });
+const matRouge = new THREE.MeshStandardMaterial({ color:0xCC1111, roughness:0.35, metalness:0.10, emissive:new THREE.Color(0x220000) });
+const matVitre = new THREE.MeshStandardMaterial({ color:0x99CCDD, roughness:0.05, metalness:0.10, transparent:true, opacity:0.30, depthWrite:false });
+const matBlanc = new THREE.MeshStandardMaterial({ color:0xFFFFFF, roughness:0.35, metalness:0.10 });
+const matVert  = new THREE.MeshStandardMaterial({ color:0x009246, roughness:0.35, metalness:0.10 });
+const matLeather = new THREE.MeshStandardMaterial({ color:0x5a3020, roughness:0.80, metalness:0.0 });
+const matFabric  = new THREE.MeshStandardMaterial({ color:0x442244, roughness:0.90, metalness:0.0 });
+let   matBody    = new THREE.MeshStandardMaterial({ color:new THREE.Color(selColor), roughness:0.35, metalness:0.45 });
+
+function getPreviewMat(name) {
+  const n = name.toLowerCase();
+  if (fabricMeshes.has(n))  return matFabric;
+  if (leatherMeshes.has(n)) return matLeather;
+  if (enjolivMeshes.has(n)) return matEnjo;
+  if (greyMeshes.has(n))    return matGris;
+  if (darkMeshes.has(n))    return matDark;
+  if (toitMeshes.has(n))    return matToit;
+  if (rougeMeshes.has(n))   return matRouge;
+  if (vitreMeshes.has(n))   return matVitre;
+  if (blancMeshes.has(n))   return matBlanc;
+  if (vertMeshes.has(n))    return matVert;
+  return matBody;
+}
+
+// Chargement FBX
+const loader = new FBXLoader();
+const loadingEl = document.getElementById('preview-loading');
+
+loader.load('Asssets/topolino_low49k.fbx', fbx => {
+  // Centrage et scale
+  const box    = new THREE.Box3().setFromObject(fbx);
+  const center = box.getCenter(new THREE.Vector3());
+  const size   = box.getSize(new THREE.Vector3());
+  fbx.position.sub(center);
+  fbx.position.y += size.y * 0.5;
+  const scale = 3.5 / Math.max(size.x, size.y, size.z);
+  fbx.scale.setScalar(scale);
+
+  // Matériaux
+  fbx.traverse(child => {
+    if (!child.isMesh) return;
+    child.material = getPreviewMat(child.name);
+    child.castShadow = false;
+    child.receiveShadow = false;
+  });
+
+  carGroup.add(fbx);
+  carGroup.rotation.y = -0.6;
+
+  loadingEl.classList.add('hidden');
+  setTimeout(() => loadingEl.classList.add('gone'), 550);
+}, null, err => {
+  console.error('FBX load error:', err);
+  loadingEl.innerHTML = '<div style="color:#ff3344;font-size:12px;letter-spacing:2px">ERREUR DE CHARGEMENT</div>';
+});
+
+// Redimensionnement
+function resizePreview() {
+  const w = canvas.parentElement.clientWidth;
+  const h = canvas.parentElement.clientHeight;
+  if (w < 1 || h < 1) return;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+resizePreview();
+new ResizeObserver(resizePreview).observe(canvas.parentElement);
+
+// Boucle de rendu
+let autoRot = true;
+(function renderLoop() {
+  requestAnimationFrame(renderLoop);
+  if (autoRot) {
+    camTheta += 0.005;
+    updateCamera();
+  }
+  ring.rotation.z -= 0.003;
+  renderer.render(scene, camera);
+})();
+
+// ── Touch : rotation (1 doigt) + zoom (2 doigts) ─────────────────
+const wrap = document.getElementById('preview-wrap');
+let pt1 = null, pt2 = null, pinchDist0 = null;
+let camDist0 = camDist, camTheta0 = camTheta;
+let autoRotTimeout = null;
+
+function stopAutoRot() {
+  autoRot = false;
+  clearTimeout(autoRotTimeout);
+  autoRotTimeout = setTimeout(() => { autoRot = true; }, 2500);
+}
+
+wrap.addEventListener('touchstart', e => {
+  e.preventDefault();
+  stopAutoRot();
+  if (e.touches.length === 1) {
+    pt1 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    camTheta0 = camTheta;
+    pt2 = null;
+  } else if (e.touches.length >= 2) {
+    pt1 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    pt2 = { x: e.touches[1].clientX, y: e.touches[1].clientY };
+    const dx = pt2.x - pt1.x, dy = pt2.y - pt1.y;
+    pinchDist0 = Math.sqrt(dx*dx + dy*dy);
+    camDist0 = camDist;
+  }
+}, { passive: false });
+
+wrap.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (e.touches.length === 1 && pt1) {
+    const dx = e.touches[0].clientX - pt1.x;
+    camTheta = camTheta0 - dx * 0.014;
+    updateCamera();
+  } else if (e.touches.length >= 2 && pinchDist0 !== null) {
+    const t0 = e.touches[0], t1 = e.touches[1];
+    const dx = t1.clientX - t0.clientX, dy = t1.clientY - t0.clientY;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    camDist = Math.max(CAM_DIST_MIN, Math.min(CAM_DIST_MAX, camDist0 * (pinchDist0 / dist)));
+    updateCamera();
+    // Rotation pendant le pinch
+    const midX = (t0.clientX + t1.clientX) / 2;
+    if (pt1) camTheta = camTheta0 - (midX - pt1.x) * 0.01;
+  }
+}, { passive: false });
+
+wrap.addEventListener('touchend', e => {
+  e.preventDefault();
+  if (e.touches.length === 0) { pt1 = null; pt2 = null; pinchDist0 = null; }
+  else if (e.touches.length === 1) {
+    pt1 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    camTheta0 = camTheta;
+    pt2 = null; pinchDist0 = null;
+  }
+}, { passive: false });
+
+wrap.addEventListener('touchcancel', e => {
+  pt1 = null; pt2 = null; pinchDist0 = null;
+  autoRot = true;
+}, { passive: false });
+
+// ── Application couleur sur le modèle ────────────────────────────
+function applyColorToPreview(hex) {
+  matBody.color.set(hex);
+  matBody.needsUpdate = true;
+}
+
+// ════════════════════════════════════════════════════════════════
+// MODAL COULEUR
+// ════════════════════════════════════════════════════════════════
+const PRESETS = [
+  // Couleurs racing F1 / classiques
+  '#FF2800', // Rouge Ferrari
+  '#FF7800', // Orange McLaren
+  '#FFD100', // Jaune Racing
+  '#00AA44', // Vert Racing
+  '#005AFF', // Bleu Williams
+  '#C0C0C0', // Argent Mercedes
+  '#004225', // British Racing Green
+  '#960000', // Rosso Scuro
+  '#0090FF', // Bleu Alpine
+  '#6B2D8B', // Violet Aston
+  '#FF80F0', // Rose Barbie
+  '#00B0B0', // Teal
+  '#D4AF37', // Or champagne
+  '#B76E79', // Rose gold
+  '#FF2244', // Rouge Candy
+  '#111111', // Noir carbone
+  '#FFFFFF', // Blanc Pureté
+  '#98D8C8', // Menthe
+  '#444455', // Gris ardoise
+  '#CC3322', // Topolino rouge (défaut)
 ];
-const EXPRESSIONS = [
-    { label: '😐 Neutre',      hint: 'Visage détendu, regard droit' },
-    { label: '😄 Souriant',    hint: 'Grand sourire !' },
-    { label: '🤩 Excité',      hint: 'Euphorique, surpris !' },
-    { label: '😡 En colère',   hint: 'Fâché, frustré !' },
-    { label: '😤 Concentré',   hint: 'Intensément focalisé' },
-    { label: '🏆 Victoire',    hint: 'Champion ! Célèbrez !' },
-];
 
-// ── Palette ───────────────────────────────────────────────────────────────────
-let selColor = COLORS[0];
-document.getElementById('palette').innerHTML = '';
-COLORS.forEach(c => {
-    const s = document.createElement('div');
-    s.className = 'swatch' + (c === selColor ? ' on' : '');
-    s.style.background = c;
-    s.addEventListener('click', () => {
-        document.querySelectorAll('.swatch').forEach(x => x.classList.remove('on'));
-        s.classList.add('on'); selColor = c;
-    });
-    document.getElementById('palette').appendChild(s);
+const presetsGrid = document.getElementById('presets-grid');
+PRESETS.forEach(c => {
+  const s = document.createElement('div');
+  s.className = 'preset-swatch' + (c === selColor ? ' on' : '');
+  s.style.background = c;
+  function pickPreset() {
+    document.querySelectorAll('.preset-swatch').forEach(x => x.classList.remove('on'));
+    s.classList.add('on');
+    pendingColor = c;
+    document.getElementById('rgb-native').value = c;
+    document.getElementById('rgb-preview').style.background = c;
+    document.getElementById('color-preview-dot').style.background = c;
+    applyColorToPreview(c);
+  }
+  s.addEventListener('touchend', e => { e.preventDefault(); pickPreset(); }, { passive: false });
+  s.addEventListener('click', pickPreset);
+  presetsGrid.appendChild(s);
 });
 
-// ── Miniatures ────────────────────────────────────────────────────────────────
-const thumbsEl = document.getElementById('thumbs');
-const thumbSlots = [];
-EXPRESSIONS.forEach((_, i) => {
-    const slot = document.createElement('div');
-    slot.className = 'thumb-slot' + (i === 0 ? ' active' : '');
-    slot.textContent = i + 1;
-    thumbsEl.appendChild(slot);
-    thumbSlots.push(slot);
+// Onglets
+document.querySelectorAll('.ctab').forEach(tab => {
+  function switchTab() {
+    document.querySelectorAll('.ctab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.ctab-content').forEach(c => c.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('ctab-' + tab.dataset.tab).classList.add('active');
+  }
+  tab.addEventListener('touchend', e => { e.preventDefault(); switchTab(); }, { passive: false });
+  tab.addEventListener('click', switchTab);
 });
 
-// ── Navigation ────────────────────────────────────────────────────────────────
-function goToStep(id) {
-    document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
-    document.getElementById(id).classList.add('active');
-}
-document.getElementById('btn-next').addEventListener('click', () => { goToStep('step-camera'); startCamera(); });
-document.getElementById('btn-skip-all').addEventListener('click', () => { capturedPhotos = []; joinGame(); });
-
-// ── Caméra ────────────────────────────────────────────────────────────────────
-let videoStream = null;
-const videoEl  = document.getElementById('cam-video');
-const overlay  = document.getElementById('cam-overlay');
-let capturedPhotos = [];
-let currentExpr = 0;
-
-async function startCamera() {
-    updateExprUI();
-    try {
-        videoStream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: 'user', width: { ideal: 240 }, height: { ideal: 240 } }
-        });
-        videoEl.srcObject = videoStream;
-        overlay.classList.add('hidden');
-        document.getElementById('cam-no-access').style.display = 'none';
-    } catch {
-        overlay.classList.add('hidden');
-        document.getElementById('cam-no-access').style.display = 'block';
-        document.getElementById('btn-capture').style.display = 'none';
-        document.getElementById('btn-join').style.display = 'block';
-    }
-}
-function stopCamera() { videoStream?.getTracks().forEach(t => t.stop()); videoStream = null; }
-
-function updateExprUI() {
-    const e = EXPRESSIONS[currentExpr];
-    document.getElementById('expr-title').textContent    = `📸 Expression ${currentExpr + 1} / 6`;
-    document.getElementById('expr-label').textContent    = e.label;
-    document.getElementById('expr-hint').textContent     = e.hint;
-    document.getElementById('cam-progress').textContent  = `${capturedPhotos.length} / 6 capturées`;
-    thumbSlots.forEach((s, i) => s.classList.toggle('active', i === currentExpr && capturedPhotos.length < 6));
-}
-
-function capturePhoto() {
-    const cv = document.createElement('canvas'); cv.width = cv.height = 96;
-    const ctx = cv.getContext('2d');
-    ctx.save(); ctx.translate(96, 0); ctx.scale(-1, 1);
-    const vw = videoEl.videoWidth || 240, vh = videoEl.videoHeight || 240;
-    const sz = Math.min(vw, vh);
-    ctx.drawImage(videoEl, (vw - sz) / 2, (vh - sz) / 2, sz, sz, 0, 0, 96, 96);
-    ctx.restore();
-    return cv.toDataURL('image/jpeg', 0.75);
-}
-
-document.getElementById('btn-capture').addEventListener('click', () => {
-    if (currentExpr >= 6) return;
-    const dataUrl = videoEl.srcObject ? capturePhoto() : null;
-    capturedPhotos.push(dataUrl);
-    const slot = thumbSlots[currentExpr];
-    slot.textContent = ''; slot.classList.add('done');
-    if (dataUrl) { const img = document.createElement('img'); img.src = dataUrl; slot.appendChild(img); }
-    else slot.textContent = '✓';
-    currentExpr++;
-    if (currentExpr >= 6) {
-        document.getElementById('btn-capture').style.display = 'none';
-        document.getElementById('btn-join').style.display    = 'block';
-        document.getElementById('cam-progress').textContent  = '6 / 6 — Prêt !';
-        thumbSlots.forEach(s => s.classList.remove('active'));
-        stopCamera();
-    } else updateExprUI();
+// Picker RGB natif
+const rgbNative = document.getElementById('rgb-native');
+rgbNative.addEventListener('input', () => {
+  pendingColor = rgbNative.value;
+  document.getElementById('rgb-preview').style.background = pendingColor;
+  document.getElementById('color-preview-dot').style.background = pendingColor;
+  applyColorToPreview(pendingColor);
+  document.querySelectorAll('.preset-swatch').forEach(x => x.classList.remove('on'));
 });
 
-document.getElementById('btn-skip-cam').addEventListener('click', () => { stopCamera(); capturedPhotos = []; joinGame(); });
-document.getElementById('btn-join').addEventListener('click', () => { stopCamera(); joinGame(); });
+// Ouverture modal
+function openColorModal() {
+  pendingColor = selColor;
+  rgbNative.value = selColor;
+  document.getElementById('rgb-preview').style.background = selColor;
+  document.getElementById('color-preview-dot').style.background = selColor;
+  document.getElementById('color-modal').classList.add('open');
+}
+function closeColorModal(apply) {
+  if (apply) {
+    selColor = pendingColor;
+    document.documentElement.style.setProperty('--sel-color', selColor);
+  } else {
+    applyColorToPreview(selColor); // restaurer
+  }
+  document.getElementById('color-modal').classList.remove('open');
+}
 
-// ── Connexion ─────────────────────────────────────────────────────────────────
+const btnColorOpen  = document.getElementById('btn-color-open');
+const btnColorClose = document.getElementById('btn-color-close');
+const btnColorApply = document.getElementById('btn-color-apply');
+const modalBg       = document.getElementById('color-modal-bg');
+
+btnColorOpen.addEventListener('touchend',  e => { e.preventDefault(); openColorModal(); }, { passive: false });
+btnColorOpen.addEventListener('click', openColorModal);
+btnColorClose.addEventListener('touchend', e => { e.preventDefault(); closeColorModal(false); }, { passive: false });
+btnColorClose.addEventListener('click', () => closeColorModal(false));
+btnColorApply.addEventListener('touchend', e => { e.preventDefault(); closeColorModal(true); }, { passive: false });
+btnColorApply.addEventListener('click', () => closeColorModal(true));
+modalBg.addEventListener('touchend', e => { e.preventDefault(); closeColorModal(false); }, { passive: false });
+modalBg.addEventListener('click', () => closeColorModal(false));
+
+// Init UI couleur
+document.documentElement.style.setProperty('--sel-color', selColor);
+document.getElementById('color-preview-dot').style.background = selColor;
+
+// ════════════════════════════════════════════════════════════════
+// PLEIN ÉCRAN
+// ════════════════════════════════════════════════════════════════
+function toggleFullscreen() {
+  const el = document.documentElement;
+  if (document.fullscreenElement || document.webkitFullscreenElement) {
+    (document.exitFullscreen || document.webkitExitFullscreen || (() => {})).call(document);
+  } else {
+    (el.requestFullscreen || el.webkitRequestFullscreen || (() => {})).call(el);
+  }
+}
+const btnFs = document.getElementById('btn-fs');
+btnFs.addEventListener('touchend', e => { e.preventDefault(); toggleFullscreen(); }, { passive: false });
+btnFs.addEventListener('click', toggleFullscreen);
+
+// ════════════════════════════════════════════════════════════════
+// SOCKET.IO + CONNEXION
+// ════════════════════════════════════════════════════════════════
 let sock = null, joined = false;
-let playerName = 'Joueur', playerColor = COLORS[0];
 
 function joinGame() {
-    playerName  = document.getElementById('inp-name').value.trim() || 'Joueur';
-    playerColor = selColor;
-    if (sock) sock.disconnect();
-    sock = io(window.location.origin);
-    sock.on('connect', () => sock.emit('register_mobile', { name: playerName, color: playerColor }));
-    sock.on('connect_error', err => {
-        document.getElementById('portrait-status').textContent = '❌ ' + err.message;
-        goToStep('step-config');
-    });
-    sock.on('assigned', d => {
-        joined = true;
-        if (capturedPhotos.length > 0) sock.emit('player_photos', { photos: capturedPhotos });
-        document.getElementById('info-name').textContent = d.name;
-        document.getElementById('conn-dot').classList.add('ok');
-        document.getElementById('avatar-circle').style.borderColor = d.color;
-        _setAvatar(d.color);
-        document.getElementById('portrait-status').textContent = '✅ Connecté ! Tournez en paysage.';
-        startHB();
-    });
-    sock.on('game_full', () => {
-        document.getElementById('portrait-status').textContent = '❌ Partie complète';
-        goToStep('step-config');
-    });
-    sock.on('disconnect', () => { document.getElementById('conn-dot').classList.remove('ok'); joined = false; stopHB(); });
-}
+  const playerName = (document.getElementById('inp-name').value.trim() || 'Joueur').toUpperCase();
+  const status = document.getElementById('portrait-status');
+  status.textContent = 'Connexion…';
 
-function _setAvatar(color) {
-    const circle = document.getElementById('avatar-circle');
-    circle.innerHTML = '';
-    if (capturedPhotos.length > 0 && capturedPhotos[0]) {
-        const img = document.createElement('img'); img.src = capturedPhotos[0]; circle.appendChild(img);
-    } else {
-        const ini = document.createElement('div'); ini.id = 'avatar-initial';
-        ini.style.background = color;
-        ini.style.width = '100%'; ini.style.height = '100%';
-        ini.style.display = 'flex'; ini.style.alignItems = 'center'; ini.style.justifyContent = 'center';
-        ini.style.fontSize = '22px'; ini.style.fontWeight = '900';
-        ini.textContent = (playerName[0] || '?').toUpperCase();
-        circle.appendChild(ini);
-    }
+  if (sock) { sock.disconnect(); sock = null; }
+  sock = io(window.location.origin);
+
+  sock.on('connect', () => {
+    sock.emit('register_mobile', { name: playerName, color: selColor });
+  });
+  sock.on('connect_error', err => {
+    status.textContent = '❌ ' + err.message;
+  });
+  sock.on('assigned', d => {
+    joined = true;
+    status.textContent = '✅ Connecté ! Tournez en paysage.';
+    document.getElementById('hud-name').textContent     = (d.name || playerName).toUpperCase();
+    document.getElementById('hud-initial').textContent  = ((d.name || playerName)[0] || '?').toUpperCase();
+    document.getElementById('hud-avatar').style.borderColor = d.color || selColor;
+    document.getElementById('conn-dot').classList.add('ok');
+    document.getElementById('conn-label').textContent = 'EN LIGNE';
+    startHB();
+  });
+  sock.on('game_full', () => { status.textContent = '❌ Partie complète'; });
+  sock.on('disconnect', () => {
+    joined = false;
+    document.getElementById('conn-dot').classList.remove('ok');
+    document.getElementById('conn-label').textContent = 'DÉCONNECTÉ';
+    stopHB();
+  });
 }
 
 let hbTimer = null;
 function startHB() { stopHB(); hbTimer = setInterval(() => sock && joined && sock.emit('heartbeat'), 5000); }
 function stopHB()  { if (hbTimer) { clearInterval(hbTimer); hbTimer = null; } }
 
-// ── État inputs ───────────────────────────────────────────────────────────────
-let jx = 0;           // steering (joystick uniquement)
-let goPressed  = false;
-let revPressed = false;
-let hbPressed  = false;
+const btnJoin = document.getElementById('btn-join');
+btnJoin.addEventListener('touchend', e => { e.preventDefault(); joinGame(); }, { passive: false });
+btnJoin.addEventListener('click', joinGame);
 
-function jy() {
-    if (goPressed  && !revPressed) return -1;
-    if (revPressed && !goPressed)  return  1;
-    return 0;
-}
+// ════════════════════════════════════════════════════════════════
+// JOYSTICKS
+// ════════════════════════════════════════════════════════════════
+let leftJx  = 0;   // steering  (-1..+1)
+let rightJy = 0;   // moteur    (-1=avant, +1=arrière)
 
-// Envoi 30 fps
+// Envoi 30fps
 setInterval(() => {
-    if (sock && joined) sock.emit('input', { jx, jy: jy(), brake: hbPressed });
+  if (sock && joined) sock.emit('input', { jx: leftJx, jy: rightJy, brake: false });
 }, 33);
 
-// ── Joystick ──────────────────────────────────────────────────────────────────
-const jsBase  = document.getElementById('js-base');
-const jsThumb = document.getElementById('js-thumb');
-const DEAD = 0.12, MAX_R = 0.9;
-let jsTouchId = null;
+// Indicateur de vitesse central
+const throttleBar = document.getElementById('throttle-bar');
+setInterval(() => {
+  const v = rightJy;            // -1 fwd, +1 rev, 0 idle
+  const h = Math.abs(v) * 22;  // px
+  throttleBar.style.height = h + 'px';
+  if (v < -0.1) {               // avancer → vert
+    throttleBar.style.bottom = '50%';
+    throttleBar.style.background = '#33dd77';
+    throttleBar.style.boxShadow  = '0 0 6px #33dd77';
+  } else if (v > 0.1) {         // reculer → orange
+    throttleBar.style.bottom = 'auto';
+    throttleBar.style.top    = '50%';
+    throttleBar.style.background = '#ff8844';
+    throttleBar.style.boxShadow  = '0 0 6px #ff8844';
+  } else {
+    throttleBar.style.height = '0';
+  }
+}, 33);
 
-function jsUpdate(touch) {
-    const rect = jsBase.getBoundingClientRect();
-    const r    = rect.width / 2;
-    const cx   = rect.left + r, cy = rect.top + r;
-    let dx = touch.clientX - cx, dy = touch.clientY - cy;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    const maxPx = r * MAX_R;
-    if (dist > maxPx) { dx *= maxPx / dist; dy *= maxPx / dist; }
-    jsThumb.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
-    jsThumb.classList.add('active');
-    const raw = dx / maxPx;
-    jx = Math.abs(raw) < DEAD ? 0 : raw;
-}
-function jsReset() {
-    jsTouchId = null; jx = 0;
-    jsThumb.style.transform = 'translate(-50%, -50%)';
-    jsThumb.classList.remove('active');
-}
+// ── Factory joystick ─────────────────────────────────────────────
+function makeJoystick(baseEl, thumbEl, useX, useY, onUpdate) {
+  const DEAD  = 0.1;
+  const MAX_R = 0.85;
+  let touchId = null;
 
-jsBase.addEventListener('touchstart', e => {
+  function update(touch) {
+    const r   = baseEl.getBoundingClientRect();
+    const cx  = r.left + r.width  * 0.5;
+    const cy  = r.top  + r.height * 0.5;
+    let dx = touch.clientX - cx;
+    let dy = touch.clientY - cy;
+    if (!useX) dx = 0;
+    if (!useY) dy = 0;
+    const dist  = Math.sqrt(dx*dx + dy*dy);
+    const maxPx = (r.width * 0.5) * MAX_R;
+    if (dist > maxPx) { const s = maxPx / dist; dx *= s; dy *= s; }
+
+    thumbEl.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+    thumbEl.classList.add('active');
+
+    const nx = Math.abs(dx / maxPx) < DEAD ? 0 : dx / maxPx;
+    const ny = Math.abs(dy / maxPx) < DEAD ? 0 : dy / maxPx;
+
+    // Feedback couleur joystick droit
+    if (thumbEl.id === 'js-right-thumb') {
+      thumbEl.classList.remove('fwd','rev');
+      if (ny < -0.15) thumbEl.classList.add('fwd');
+      else if (ny > 0.15) thumbEl.classList.add('rev');
+    }
+
+    onUpdate(nx, ny);
+  }
+
+  function reset() {
+    touchId = null;
+    thumbEl.style.transform = 'translate(-50%,-50%)';
+    thumbEl.classList.remove('active','fwd','rev');
+    onUpdate(0, 0);
+  }
+
+  baseEl.addEventListener('touchstart', e => {
     e.preventDefault();
+    if (touchId !== null) return;
     const t = e.changedTouches[0];
-    jsTouchId = t.identifier;
-    jsUpdate(t);
-}, { passive: false });
-jsBase.addEventListener('touchmove', e => {
+    touchId = t.identifier;
+    update(t);
+  }, { passive: false });
+
+  baseEl.addEventListener('touchmove', e => {
     e.preventDefault();
-    for (const t of e.changedTouches) if (t.identifier === jsTouchId) { jsUpdate(t); break; }
-}, { passive: false });
-jsBase.addEventListener('touchend', e => {
-    for (const t of e.changedTouches) if (t.identifier === jsTouchId) { jsReset(); break; }
-}, { passive: false });
-jsBase.addEventListener('touchcancel', jsReset, { passive: false });
+    for (const t of e.changedTouches) {
+      if (t.identifier === touchId) { update(t); break; }
+    }
+  }, { passive: false });
 
-// ── Boutons jeu ───────────────────────────────────────────────────────────────
-function setupGameBtn(id, onDown, onUp) {
-    const el = document.getElementById(id);
-    el.addEventListener('touchstart', e => { e.preventDefault(); el.classList.add('pressed'); onDown(); }, { passive: false });
-    ['touchend', 'touchcancel'].forEach(ev =>
-        el.addEventListener(ev, e => { e.preventDefault(); el.classList.remove('pressed'); onUp(); }, { passive: false })
-    );
+  ['touchend','touchcancel'].forEach(ev =>
+    baseEl.addEventListener(ev, e => {
+      e.preventDefault();
+      for (const t of e.changedTouches) {
+        if (t.identifier === touchId) { reset(); break; }
+      }
+    }, { passive: false })
+  );
 }
-setupGameBtn('btn-go',  () => { goPressed  = true;  }, () => { goPressed  = false; });
-setupGameBtn('btn-rev', () => { revPressed = true;  }, () => { revPressed = false; });
-setupGameBtn('btn-hb',  () => { hbPressed  = true;  }, () => { hbPressed  = false; });
 
-// ── Reset orientation ─────────────────────────────────────────────────────────
+// Joystick gauche → direction (X uniquement, thumb se déplace librement mais seul X compte)
+makeJoystick(
+  document.getElementById('js-left-base'),
+  document.getElementById('js-left-thumb'),
+  true, true,              // dx et dy visibles pour réalisme
+  (x, _y) => { leftJx = x; }
+);
+
+// Joystick droit → moteur (Y uniquement)
+makeJoystick(
+  document.getElementById('js-right-base'),
+  document.getElementById('js-right-thumb'),
+  true, true,
+  (_x, y) => { rightJy = y; }
+);
+
+// Reset sur changement d'orientation
 window.addEventListener('orientationchange', () => {
-    jsReset(); goPressed = false; revPressed = false; hbPressed = false;
+  leftJx = 0; rightJy = 0;
+  ['js-left-thumb','js-right-thumb'].forEach(id => {
+    const el = document.getElementById(id);
+    el.style.transform = 'translate(-50%,-50%)';
+    el.classList.remove('active','fwd','rev');
+  });
 });
+
 </script>
 </body>
 </html>

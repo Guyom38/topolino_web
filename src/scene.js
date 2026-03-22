@@ -15,7 +15,8 @@ Object.assign(renderer.domElement.style, { position: 'fixed', inset: '0', zIndex
 document.body.appendChild(renderer.domElement);
 
 // Lumière ambiante
-scene.add(new THREE.AmbientLight(0xd0e8ff, 0.18));
+export const ambient = new THREE.AmbientLight(0xd0e8ff, 0.18);
+scene.add(ambient);
 
 // Soleil
 export const sun = new THREE.DirectionalLight(0xfff5e0, 2.2);

@@ -222,6 +222,7 @@ export class PlayerCar {
             this.car.position.z
         );
 
+
         // Mettre à jour la flèche selon l'orientation relative à la caméra
         const camAngle = Math.atan2(
             camera.position.x - this.car.position.x,
