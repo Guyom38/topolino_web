@@ -1,10 +1,10 @@
 @echo off
-title GTA - Game Topolino Amandine
+title TOPOLINO - LA CAISSE À MA MÈRE
 color 0A
 
 echo.
 echo  ============================================
-echo   GTA - Game Topolino Amandine
+echo   TOPOLINO - LA CAISSE À MA MÈRE
 echo  ============================================
 echo.
 

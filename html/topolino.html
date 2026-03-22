@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>La Légende Topolino - La Caisse à Ma Mère</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .article {
+            background: rgba(0,0,0,0.6);
+            padding: 50px;
+            border-radius: 20px;
+            border-left: 4px solid var(--accent-glow);
+            margin-top: 100px;
+        }
+        .article h2 {
+            color: var(--accent-glow);
+            font-size: 36px;
+            margin-bottom: 20px;
+        }
+        .article p {
+            font-size: 18px;
+            line-height: 1.8;
+            color: #ddd;
+            margin-bottom: 20px;
+        }
+        .stats {
+            display: flex;
+            gap: 20px;
+            margin-top: 30px;
+        }
+        .stat-box {
+            flex: 1;
+            background: rgba(255,255,255,0.05);
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .stat-box span {
+            display: block;
+            font-size: 32px;
+            font-weight: 900;
+            color: var(--neon-blue);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="grid-bg"></div>
+
+    <nav>
+        <a href="index.html" class="logo">TOPOLINO</a>
+        <div class="nav-links">
+            <a href="index.html">Accueil</a>
+            <a href="topolino.html" class="active">La Légende</a>
+            <a href="media.html">Clips</a>
+            <a href="mods.html">Mods</a>
+        </div>
+    </nav>
+
+    <section>
+        <div class="container reveal">
+            <h1 class="gta-title" style="font-size: 80px; text-align: center;">TOPOLINO : LA CAISSE À MA MÈRE</h1>
+            <p style="text-align: center; color: #aaa; letter-spacing: 0.2em;">LE MYTHE D'ORIGINE (1936 - 1955)</p>
+            
+            <div class="article">
+                <div style="display: flex; gap: 40px; align-items: flex-start;">
+                    <div style="flex: 1;">
+                        <h2>Petite, mais féroce.</h2>
+                        <p>La Fiat 500, populairement connue sous le nom de "Topolino" (petite souris / Mickey Mouse en italien), est l'une des plus petites voitures jamais produites en série. Conçue par Dante Giacosa, elle a motorisé l'Italie et l'Europe après-guerre.</p>
+                        <p>Dans <b>TOPOLINO : LA CAISSE À MA MÈRE</b>, nous avons pris ce modèle historique et nous l'avons transformé en une véritable bête d'arène. Que ce soit pour drifter sur les routes, échapper à la police, ou jouer au football géant, la Topolino prouve que la taille ne compte pas quand on a un moteur surboosté.</p>
+                        
+                        <div class="stats">
+                            <div class="stat-box">
+                                <span>569 cc</span>
+                                Moteur d'origine
+                            </div>
+                            <div class="stat-box">
+                                <span>13 ch</span>
+                                Puissance pure (1936)
+                            </div>
+                            <div class="stat-box">
+                                <span>85 km/h</span>
+                                Vitesse max d'époque
+                            </div>
+                        </div>
+                    </div>
+                    <div style="flex: 1;">
+                        <img src="https://images.unsplash.com/photo-1595085338165-27a0bf996bf0?q=80&w=800&auto=format&fit=crop" class="parallax-img" alt="Voiture vintage">
+                        <p style="text-align: center; font-size: 12px; color: #666; margin-top: 10px;">(Image d'illustration - Véhicule d'époque)</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <p>&copy; 2026 TOPOLINO - LA CAISSE À MA MÈRE. Tous droits réservés.</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>

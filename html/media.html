@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Médias - TOPOLINO : LA CAISSE À MA MÈRE</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .video-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-top: 50px;
+        }
+        .video-card {
+            background: rgba(255,255,255,0.05);
+            border-radius: 15px;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.1);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        .video-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 10px 30px rgba(0, 242, 255, 0.2);
+            border-color: var(--neon-blue);
+        }
+        .video-thumb {
+            width: 100%;
+            height: 200px;
+            background: #111;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        .video-thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0.7;
+            transition: opacity 0.3s;
+        }
+        .video-card:hover .video-thumb img {
+            opacity: 1;
+        }
+        .play-btn {
+            position: absolute;
+            font-size: 50px;
+            color: rgba(255,255,255,0.8);
+            filter: drop-shadow(0 0 10px #000);
+        }
+        .video-info {
+            padding: 20px;
+        }
+        .video-info h3 {
+            color: var(--accent-glow);
+            margin-bottom: 10px;
+            font-size: 20px;
+        }
+        .video-info p {
+            color: #aaa;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="grid-bg"></div>
+
+    <nav>
+        <a href="index.html" class="logo">TOPOLINO</a>
+        <div class="nav-links">
+            <a href="index.html">Accueil</a>
+            <a href="topolino.html">La Légende</a>
+            <a href="media.html" class="active">Clips</a>
+            <a href="mods.html">Mods</a>
+        </div>
+    </nav>
+
+    <section>
+        <div class="container reveal">
+            <h1 class="gta-title" style="font-size: 70px; text-align: center;">TOPOLINO TV</h1>
+            <p style="text-align: center; color: #aaa; letter-spacing: 0.2em; margin-bottom: 40px;">LES MEILLEURES ACTIONS DE LA COMMUNAUTÉ</p>
+            
+            <div class="video-grid">
+                <!-- Video 1 -->
+                <div class="video-card">
+                    <div class="video-thumb">
+                        <img src="https://images.unsplash.com/photo-1542281286-9e0a16bb7366?q=80&w=600&auto=format&fit=crop" alt="Thumbnail">
+                        <div class="play-btn">▶</div>
+                    </div>
+                    <div class="video-info">
+                        <h3>Dodge de l'extrême</h3>
+                        <p>Esquive à la dernière milliseconde d'une voiture de police en mode poursuite.</p>
+                    </div>
+                </div>
+                <!-- Video 2 -->
+                <div class="video-card">
+                    <div class="video-thumb">
+                        <img src="https://images.unsplash.com/photo-1511512578047-dfb367046420?q=80&w=600&auto=format&fit=crop" alt="Thumbnail">
+                        <div class="play-btn">▶</div>
+                    </div>
+                    <div class="video-info">
+                        <h3>But de 100 mètres !</h3>
+                        <p>Un tir incroyable en mode Football qui traverse toute l'arène.</p>
+                    </div>
+                </div>
+                <!-- Video 3 -->
+                <div class="video-card">
+                    <div class="video-thumb">
+                        <img src="https://images.unsplash.com/photo-1610890716175-3ad013693fb1?q=80&w=600&auto=format&fit=crop" alt="Thumbnail">
+                        <div class="play-btn">▶</div>
+                    </div>
+                    <div class="video-info">
+                        <h3>Survivant du TRON</h3>
+                        <p>Le joueur "Patate Douce" survit 5 minutes dans un labyrinthe de néons.</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="text-align: center; margin-top: 50px;">
+                <a href="#" class="btn" onclick="alert('Bientôt disponible !')">Soumettre mon clip</a>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <p>&copy; 2026 TOPOLINO - LA CAISSE À MA MÈRE. Tous droits réservés.</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>

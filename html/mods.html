@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mods & Communauté - TOPOLINO : LA CAISSE À MA MÈRE</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .mod-list {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            margin-top: 50px;
+        }
+        .mod-item {
+            background: rgba(255,255,255,0.05);
+            padding: 30px;
+            border-radius: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-left: 4px solid var(--neon-blue);
+        }
+        .mod-info h3 {
+            color: var(--accent-glow);
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+        .mod-info p {
+            color: #ddd;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="grid-bg"></div>
+
+    <nav>
+        <a href="index.html" class="logo">TOPOLINO</a>
+        <div class="nav-links">
+            <a href="index.html">Accueil</a>
+            <a href="topolino.html">La Légende</a>
+            <a href="media.html">Clips</a>
+            <a href="mods.html" class="active">Mods</a>
+        </div>
+    </nav>
+
+    <section>
+        <div class="container reveal">
+            <h1 class="gta-title" style="font-size: 70px; text-align: center;">MODDING</h1>
+            <p style="text-align: center; color: #aaa; letter-spacing: 0.2em;">CRÉEZ, PARTAGEZ, DÉTRUISEZ.</p>
+            
+            <div class="mod-list">
+                <div class="mod-item">
+                    <div class="mod-info">
+                        <h3>Pack V8 Bi-Turbo</h3>
+                        <p>Change la vitesse maximale de toutes les voitures à 300 km/h. Attention aux murs.</p>
+                    </div>
+                    <a href="#" class="btn" onclick="alert('Téléchargement simulé !')">Télécharger</a>
+                </div>
+                
+                <div class="mod-item">
+                    <div class="mod-info">
+                        <h3>Arène Lunaire</h3>
+                        <p>Remplace la gravité par celle de la Lune. Les collisions vous envoient en orbite.</p>
+                    </div>
+                    <a href="#" class="btn" onclick="alert('Téléchargement simulé !')">Télécharger</a>
+                </div>
+
+                <div class="mod-item" style="border-color: #ff3344;">
+                    <div class="mod-info">
+                        <h3>Topolino Monster Truck</h3>
+                        <p>Des roues gigantesques. Vous pouvez maintenant rouler sur les autres joueurs.</p>
+                    </div>
+                    <a href="#" class="btn" onclick="alert('Téléchargement simulé !')">Télécharger</a>
+                </div>
+            </div>
+            
+            <div style="text-align: center; margin-top: 60px;">
+                <h3 style="margin-bottom: 20px;">Envie de créer votre propre mod ?</h3>
+                <a href="#" class="btn btn-primary" onclick="alert('Documentation API en cours de rédaction...')">LIRE LA DOCUMENTATION API</a>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <p>&copy; 2026 TOPOLINO - LA CAISSE À MA MÈRE. Tous droits réservés.</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>

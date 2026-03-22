@@ -1,4 +1,4 @@
-// ── Mode Destruction Derby : arène circulaire avec dune centrale ──────────────
+// ── Mode Destruction Derby : arène circulaire avec trou mobile ────────────────
 import * as THREE from 'three';
 import { scene } from '../scene.js';
 import { setDerbyCamera, setCameraFixed, setCameraFollow } from '../camera.js';
@@ -8,34 +8,39 @@ import { createShadow } from '../shadow.js';
 import { createAura } from '../aura.js';
 
 const ARENA_R      = 45;    // rayon de la plateforme
-const FALL_R       = 48;    // distance de chute
+const FALL_R       = 48;    // distance de chute (bord extérieur)
 const MAX_LIVES    = 3;
-const RESPAWN_TIME = 2500;  // ms avant respawn
-const FALL_SPEED   = 0.18;
-const DUNE_R       = 16;    // rayon de la butte
-const DUNE_H       = 4.5;   // hauteur max de la butte
-const HOLE_R       = 5.0;   // rayon du trou au centre
-const HOLE_DEPTH   = 3.5;   // profondeur du trou
+const RESPAWN_TIME = 1200;  // ms avant respawn (rapide pour le trou)
+const FALL_SPEED   = 0.22;
+const HOLE_R       = 9.0;   // rayon du trou (agrandi)
+const HOLE_DEPTH   = 4.0;   // profondeur du trou
+const HOLE_SPEED   = 0.12;  // vitesse de déplacement du trou
 
 let _platform   = null;
 let _lives      = new Map();   // playerId → { lives, falling, fallTime }
 let _phase      = 'waiting';   // waiting → racing → ended
 let _statusEl   = null;
 let _livesEls   = new Map();
-let _duneMesh   = null;
-let _holeMesh   = null;
+let _holeGroup  = null;        // groupe visuel du trou (mobile)
+let _holePos    = { x: 0, z: 0, vx: HOLE_SPEED, vz: HOLE_SPEED * 0.73 };
+let _hazardRing = null;        // { mesh, tex }
+let _holeHazardRing = null;    // { mesh, tex }
 let _waitStart  = 0;
 
-// ── Arène ────────────────────────────────────────────────────────────────────
+// ── Arène (plateforme pleine, le trou est un objet mobile par-dessus) ───────
 function _createArena() {
     const group = new THREE.Group();
 
-    // Plateforme circulaire (terre battue)
+    // Plateforme circulaire (terre battue) — stencil: ne s'affiche pas où le trou marque
     const platGeo = new THREE.CylinderGeometry(ARENA_R, ARENA_R, 0.6, 64);
     const platMat = new THREE.MeshStandardMaterial({ color: 0x8a6a4a, roughness: 0.85, metalness: 0.05 });
+    platMat.stencilWrite = false;
+    platMat.stencilFunc  = THREE.NotEqualStencilFunc;
+    platMat.stencilRef   = 1;
     const platform = new THREE.Mesh(platGeo, platMat);
     platform.receiveShadow = true;
     platform.position.y = -0.3;
+    platform.renderOrder = 2;
     group.add(platform);
 
     // Bordure lumineuse (anneau)
@@ -46,7 +51,7 @@ function _createArena() {
     rim.position.y = 0.05;
     group.add(rim);
 
-    // Sol texturé (grille de combat)
+    // Sol texturé (grille)
     const cv = document.createElement('canvas'); cv.width = cv.height = 512;
     const ctx = cv.getContext('2d');
     ctx.fillStyle = '#6b5035';
@@ -57,93 +62,156 @@ function _createArena() {
         ctx.beginPath(); ctx.moveTo(p, 0); ctx.lineTo(p, 512); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(0, p); ctx.lineTo(512, p); ctx.stroke();
     }
-    ctx.strokeStyle = '#3a2510';
-    [128, 256, 384].forEach(r => {
-        ctx.beginPath(); ctx.arc(256, 256, r, 0, Math.PI * 2); ctx.stroke();
-    });
     const tex = new THREE.CanvasTexture(cv);
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
     tex.repeat.set(3, 3);
+    const gridMat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.6, depthWrite: false });
+    gridMat.stencilWrite = false;
+    gridMat.stencilFunc  = THREE.NotEqualStencilFunc;
+    gridMat.stencilRef   = 1;
     const gridMesh = new THREE.Mesh(
         new THREE.CircleGeometry(ARENA_R - 0.5, 64),
-        new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.6, depthWrite: false })
+        gridMat
     );
     gridMesh.rotation.x = -Math.PI / 2;
     gridMesh.position.y = 0.02;
+    gridMesh.renderOrder = 3;
     group.add(gridMesh);
 
     scene.add(group);
     return group;
 }
 
-// ── Butte centrale (LatheGeometry = profil de révolution propre) ─────────────
-function _createDune() {
-    // Profil de révolution : du centre (r=0) vers l'extérieur (r=DUNE_R)
-    // Avec un creux au centre (trou) puis une montée puis une descente douce
-    const pts = [];
-    const STEPS = 40;
-    for (let i = 0; i <= STEPS; i++) {
-        const t = i / STEPS;           // 0 → 1 (centre → bord)
-        const r = t * DUNE_R;
-        let y;
-        const holeT = HOLE_R / DUNE_R; // fraction du rayon occupée par le trou
-        if (t < holeT) {
-            // Dans le trou : fond plat qui remonte doucement
-            const ht = t / holeT;      // 0→1 dans le trou
-            y = -HOLE_DEPTH * (1 - ht * ht);
-        } else {
-            // Butte : montée puis descente en cloche
-            const bt = (t - holeT) / (1 - holeT); // 0→1 après le trou
-            y = DUNE_H * Math.sin(bt * Math.PI) * (1 - bt * 0.3);
-        }
-        pts.push(new THREE.Vector2(r, y));
+// ── Barrière de danger animée (rayures rouges/noires) ────────────────────────
+function _createHazardRing() {
+    const cv = document.createElement('canvas');
+    cv.width = 512; cv.height = 64;
+    const ctx = cv.getContext('2d');
+    ctx.fillStyle = '#0a0000';
+    ctx.fillRect(0, 0, 512, 64);
+    ctx.fillStyle = '#dd1100';
+    const sw = 40;
+    for (let x = -80; x < 600; x += sw * 2) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x + sw, 0);
+        ctx.lineTo(x + sw - 64, 64);
+        ctx.lineTo(x - 64, 64);
+        ctx.closePath();
+        ctx.fill();
     }
 
-    const geo = new THREE.LatheGeometry(pts, 48);
-    geo.computeVertexNormals();
+    const tex = new THREE.CanvasTexture(cv);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(16, 1);
 
-    // Même couleur que la plateforme (terre battue cohérente)
-    const mat = new THREE.MeshStandardMaterial({
-        color: 0x8a6a4a, roughness: 0.9, metalness: 0.05,
+    const geo = new THREE.CylinderGeometry(ARENA_R + 0.8, ARENA_R + 0.8, 3.5, 80, 1, true);
+    const mat = new THREE.MeshBasicMaterial({
+        map: tex, side: THREE.DoubleSide,
+        transparent: true, opacity: 0.85,
     });
-    _duneMesh = new THREE.Mesh(geo, mat);
-    _duneMesh.receiveShadow = true;
-    _duneMesh.castShadow    = true;
-    _duneMesh.position.y    = 0;
-    scene.add(_duneMesh);
-
-    // Fond du trou : disque sombre
-    const holeMat = new THREE.MeshStandardMaterial({ color: 0x1a0a00, roughness: 1.0 });
-    _holeMesh = new THREE.Mesh(new THREE.CircleGeometry(HOLE_R * 0.95, 32), holeMat);
-    _holeMesh.rotation.x = -Math.PI / 2;
-    _holeMesh.position.y = -HOLE_DEPTH + 0.05;
-    scene.add(_holeMesh);
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.y = 1.75;
+    scene.add(mesh);
+    _hazardRing = { mesh, tex };
 }
 
-/** Hauteur du terrain au point (x, z) — butte + trou */
-export function getDuneHeight(x, z) {
-    const d = Math.sqrt(x * x + z * z);
-    if (d >= DUNE_R) return 0;
+// ── Trou mobile (groupe visuel qui se déplace) ───────────────────────────────
+function _createHole() {
+    const group = new THREE.Group();
 
-    const t     = d / DUNE_R;
-    const holeT = HOLE_R / DUNE_R;
+    // Disque masque stencil (invisible, marque le stencil pour découper la plateforme)
+    const coverMat = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
+    coverMat.stencilWrite   = true;
+    coverMat.stencilRef     = 1;
+    coverMat.stencilFunc    = THREE.AlwaysStencilFunc;
+    coverMat.stencilZPass   = THREE.ReplaceStencilOp;
+    coverMat.stencilFail    = THREE.KeepStencilOp;
+    coverMat.stencilZFail   = THREE.KeepStencilOp;
+    const cover = new THREE.Mesh(new THREE.CircleGeometry(HOLE_R, 48), coverMat);
+    cover.rotation.x = -Math.PI / 2;
+    cover.position.y = 0.04;
+    cover.renderOrder = 1;  // rendu AVANT la plateforme
+    group.add(cover);
 
-    if (t < holeT) {
-        // Trou
-        const ht = t / holeT;
-        return -HOLE_DEPTH * (1 - ht * ht);
+    // Parois verticales du trou (cylindre ouvert)
+    const wallGeo = new THREE.CylinderGeometry(HOLE_R, HOLE_R, HOLE_DEPTH, 48, 1, true);
+    const wallMat = new THREE.MeshStandardMaterial({
+        color: 0x3a2518, roughness: 0.95, side: THREE.DoubleSide,
+    });
+    const walls = new THREE.Mesh(wallGeo, wallMat);
+    walls.position.y = -HOLE_DEPTH / 2;
+    group.add(walls);
+
+    // Fond du trou : disque très sombre
+    const botMat = new THREE.MeshBasicMaterial({ color: 0x040100 });
+    const bottom = new THREE.Mesh(new THREE.CircleGeometry(HOLE_R, 48), botMat);
+    bottom.rotation.x = -Math.PI / 2;
+    bottom.position.y = -HOLE_DEPTH + 0.02;
+    group.add(bottom);
+
+    // Anneau de danger autour du trou (rayures rouges/noires animées)
+    const cv = document.createElement('canvas');
+    cv.width = 512; cv.height = 64;
+    const ctx = cv.getContext('2d');
+    ctx.fillStyle = '#0a0000';
+    ctx.fillRect(0, 0, 512, 64);
+    ctx.fillStyle = '#dd1100';
+    const sw = 40;
+    for (let x = -80; x < 600; x += sw * 2) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x + sw, 0);
+        ctx.lineTo(x + sw - 64, 64);
+        ctx.lineTo(x - 64, 64);
+        ctx.closePath();
+        ctx.fill();
     }
-    // Butte
-    const bt = (t - holeT) / (1 - holeT);
-    return DUNE_H * Math.sin(bt * Math.PI) * (1 - bt * 0.3);
+    const hTex = new THREE.CanvasTexture(cv);
+    hTex.wrapS = THREE.RepeatWrapping;
+    hTex.wrapT = THREE.RepeatWrapping;
+    hTex.repeat.set(8, 1);
+    const ringGeo = new THREE.CylinderGeometry(HOLE_R + 0.4, HOLE_R + 0.4, 2.5, 48, 1, true);
+    const ringMat = new THREE.MeshBasicMaterial({
+        map: hTex, side: THREE.DoubleSide,
+        transparent: true, opacity: 0.9,
+    });
+    const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+    ringMesh.position.y = -HOLE_DEPTH / 2 + 0.5;
+    group.add(ringMesh);
+    _holeHazardRing = { mesh: ringMesh, tex: hTex };
+
+    // Position initiale aléatoire (pas trop au bord)
+    const startAng = Math.random() * Math.PI * 2;
+    const startR   = 15 + Math.random() * 10;
+    _holePos.x  = Math.cos(startAng) * startR;
+    _holePos.z  = Math.sin(startAng) * startR;
+    // Direction initiale aléatoire
+    const dirAng = Math.random() * Math.PI * 2;
+    _holePos.vx = Math.cos(dirAng) * HOLE_SPEED;
+    _holePos.vz = Math.sin(dirAng) * HOLE_SPEED;
+
+    group.position.set(_holePos.x, 0, _holePos.z);
+    scene.add(group);
+    _holeGroup = group;
+}
+
+/** Hauteur du terrain au point (x, z) — trou mobile */
+export function getDuneHeight(x, z) {
+    const dx = x - _holePos.x;
+    const dz = z - _holePos.z;
+    const d  = Math.sqrt(dx * dx + dz * dz);
+    if (d < HOLE_R) return -HOLE_DEPTH;
+    return 0;
 }
 
 // ── Placement joueurs en cercle ──────────────────────────────────────────────
 function _placePlayer(p, index, total) {
     const ang = (index / total) * Math.PI * 2;
-    const r   = ARENA_R * 0.90;  // au bord du cercle
+    const r   = ARENA_R - 4;
     p.car.position.set(Math.cos(ang) * r, 0, Math.sin(ang) * r);
-    p.carAngle = ang + Math.PI;   // face au centre, prêt à foncer
+    p.carAngle = ang + Math.PI / 2;
     p.car.rotation.y = p.carAngle;
     p.carSpeed = 0;
     p.velocity.set(0, 0, 0);
@@ -156,13 +224,14 @@ export async function initDerbyMode(players) {
     scene.fog = new THREE.FogExp2(0x0d0500, 0.012);
 
     _platform = _createArena();
-    _createDune();
+    _createHole();
+    _createHazardRing();
     _lives.clear();
     _livesEls.clear();
     _phase = 'waiting';
     _waitStart = performance.now();
 
-    // Force-loader toutes les voitures (le spawn différé ne marche pas pour les arènes)
+    // Force-loader toutes les voitures
     for (const p of players.values()) {
         if (!p.car) {
             await loadCarForPlayer(p);
@@ -213,7 +282,7 @@ export async function initDerbyMode(players) {
         const nameEl = document.createElement('div');
         nameEl.textContent = p.name;
         Object.assign(nameEl.style, {
-            color: p.colorHex,    // déjà un string '#rrggbb'
+            color: p.colorHex,
             fontSize: '13px', fontWeight: '700', fontFamily: 'monospace',
             textShadow: '0 0 6px rgba(0,0,0,0.8)',
         });
@@ -229,20 +298,25 @@ export async function initDerbyMode(players) {
 
 // ── Update ───────────────────────────────────────────────────────────────────
 export function updateDerbyMode(players, now) {
-    // Phase d'attente initiale (le temps que les voitures chargent)
     if (_phase === 'waiting') {
         const ready = Array.from(players.values()).filter(p => p.car).length;
         if (ready >= 1 && now - _waitStart > 1500) {
             _phase = 'racing';
         }
         if (_statusEl) _statusEl.textContent = '🏁 Prêt…';
+        // Bouger le trou même pendant l'attente
+        _moveHole();
         return;
     }
 
     if (_phase === 'ended') {
+        _moveHole();
         _updateStatus(players);
         return;
     }
+
+    // ── Déplacer le trou (bille qui rebondit) ─────────────────────────────────
+    _moveHole();
 
     // ── Phase racing ─────────────────────────────────────────────────────────
     const aliveList = Array.from(players.values())
@@ -259,10 +333,17 @@ export function updateDerbyMode(players, now) {
         const li = _lives.get(id);
         if (!li) continue;
 
-        // ── Dune : appliquer la hauteur ──────────────────────────────────
-        const duneY = getDuneHeight(p.car.position.x, p.car.position.z);
-        if (duneY > 0.1) {
-            p.car.position.y = Math.max(p.car.position.y, duneY);
+        // ── Trou mobile : chute si dans le trou ─────────────────────────
+        if (!li.falling) {
+            const dx = p.car.position.x - _holePos.x;
+            const dz = p.car.position.z - _holePos.z;
+            const distToHole = Math.sqrt(dx * dx + dz * dz);
+            if (distToHole < HOLE_R - 1) {
+                li.falling  = true;
+                li.fallTime = now;
+                p.carSpeed  = 0;
+                p.velocity.set(0, 0, 0);
+            }
         }
 
         // ── Chute ────────────────────────────────────────────────────────
@@ -286,9 +367,10 @@ export function updateDerbyMode(players, now) {
                     continue;
                 }
 
-                // Respawn au bord de l'arène
+                // Respawn en bordure de l'arène
                 const ang = Math.random() * Math.PI * 2;
-                p.car.position.set(Math.cos(ang) * 20, 0, Math.sin(ang) * 20);
+                const r   = ARENA_R - 5;
+                p.car.position.set(Math.cos(ang) * r, 0, Math.sin(ang) * r);
                 p.car.visible = true;
                 p.carAngle = ang + Math.PI;
                 p.car.rotation.y = p.carAngle;
@@ -308,7 +390,38 @@ export function updateDerbyMode(players, now) {
         }
     }
 
+    // Animer les rayures de danger
+    if (_hazardRing) _hazardRing.tex.offset.x += 0.003;
+    if (_holeHazardRing) _holeHazardRing.tex.offset.x -= 0.005;
+
     _updateStatus(players);
+}
+
+// ── Déplacement du trou (bille qui rebondit dans l'arène) ────────────────────
+function _moveHole() {
+    _holePos.x += _holePos.vx;
+    _holePos.z += _holePos.vz;
+
+    // Rebondir si le trou touche le bord de l'arène
+    const maxR = ARENA_R - HOLE_R - 2;
+    const dist = Math.sqrt(_holePos.x * _holePos.x + _holePos.z * _holePos.z);
+    if (dist > maxR) {
+        // Réflexion par rapport à la normale (direction centre → trou)
+        const nx = _holePos.x / dist;
+        const nz = _holePos.z / dist;
+        const dot = _holePos.vx * nx + _holePos.vz * nz;
+        _holePos.vx -= 2 * dot * nx;
+        _holePos.vz -= 2 * dot * nz;
+        // Remettre dans les limites
+        _holePos.x = nx * maxR;
+        _holePos.z = nz * maxR;
+    }
+
+    // Mettre à jour la position du groupe visuel
+    if (_holeGroup) {
+        _holeGroup.position.x = _holePos.x;
+        _holeGroup.position.z = _holePos.z;
+    }
 }
 
 function _updateStatus(players) {
@@ -331,23 +444,30 @@ function _updateStatus(players) {
 // ── Dispose ──────────────────────────────────────────────────────────────────
 export function disposeDerbyMode() {
     if (_platform) { scene.remove(_platform); _platform = null; }
-    if (_duneMesh) {
-        scene.remove(_duneMesh);
-        _duneMesh.geometry.dispose();
-        _duneMesh.material.map?.dispose();
-        _duneMesh.material.dispose();
-        _duneMesh = null;
+    if (_holeGroup) {
+        _holeGroup.traverse(child => {
+            if (child.isMesh) {
+                child.geometry.dispose();
+                child.material.map?.dispose();
+                child.material.dispose();
+            }
+        });
+        scene.remove(_holeGroup);
+        _holeGroup = null;
     }
-    if (_holeMesh) {
-        scene.remove(_holeMesh);
-        _holeMesh.geometry.dispose();
-        _holeMesh.material.dispose();
-        _holeMesh = null;
+    if (_hazardRing) {
+        scene.remove(_hazardRing.mesh);
+        _hazardRing.mesh.geometry.dispose();
+        _hazardRing.tex.dispose();
+        _hazardRing.mesh.material.dispose();
+        _hazardRing = null;
     }
+    _holeHazardRing = null; // déjà nettoyé avec _holeGroup
     _statusEl?.remove(); _statusEl = null;
     document.getElementById('derby-lives-bar')?.remove();
     _lives.clear();
     _livesEls.clear();
+    _holePos = { x: 0, z: 0, vx: HOLE_SPEED, vz: HOLE_SPEED * 0.73 };
     setCameraFollow();
     scene.fog = null;
 }

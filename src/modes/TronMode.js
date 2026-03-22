@@ -6,8 +6,8 @@ import { setPlayerScore } from '../ui.js';
 
 const ARENA_SIZE     = 160;
 const TRAIL_DIST     = 1.0;   // distance entre segments de trace
-const TRAIL_W        = 1.0;
-const TRAIL_H        = 3.0;
+const TRAIL_W        = 0.4;
+const TRAIL_H        = 1.8;
 const HIT_DIST       = 1.4;
 const SAFE_SEGMENTS  = 6;     // segments récents ignorés (évite le suicide)
 const MAX_SEGMENTS   = 120;   // longueur max visible (après ça → fondu)
@@ -72,9 +72,9 @@ function _createArena() {
 
 function _resetPlayer(p) {
     const ang = Math.random() * Math.PI * 2;
-    const r   = ARENA_SIZE * 0.35;
+    const r   = ARENA_SIZE * 0.46;  // au bord de l'arène
     p.car.position.set(Math.cos(ang) * r, 0, Math.sin(ang) * r);
-    p.carAngle = ang + Math.PI;
+    p.carAngle = ang + Math.PI;     // face au centre
     p.car.rotation.y = p.carAngle;
     p.carSpeed = 0;
     p.velocity.set(0, 0, 0);
@@ -172,7 +172,7 @@ export function updateTronMode(players, now) {
                 new THREE.MeshBasicMaterial({
                     color: t.color,
                     transparent: true,
-                    opacity: 0.85,
+                    opacity: 1.0,
                 })
             );
 
@@ -194,7 +194,7 @@ export function updateTronMode(players, now) {
                 if (!m) continue;
                 // Opacité dégressive : 0 pour le plus vieux, ~0.85 pour le seuil
                 const age = fadeCount - si;
-                const op  = Math.max(0, 1 - age / FADE_SEGMENTS) * 0.85;
+                const op  = Math.max(0, 1 - age / FADE_SEGMENTS);
                 m.material.opacity = op;
                 if (op <= 0) {
                     _trailGroup.remove(m);
