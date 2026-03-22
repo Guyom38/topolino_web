@@ -500,17 +500,12 @@ function _buildCar(fbxTemplate, color, isPolice = false) {
         const hHalfWL = new THREE.Vector3();
         headlightMesh.localToWorld(hHalfWL.copy(hBox.min));
         clone.worldToLocal(hHalfWL);
-        const offset = 40; // séparation gauche/droite sur axe Z
+        const offset = 50; // séparation gauche/droite sur axe Z
 
         for (const side of [-1, 1]) {
-            // SpotLight dirigé vers l'avant (-X) comme de vrais phares
-            // hCenter = centre calandre, séparation gauche/droite sur Z
-            const pl = new THREE.SpotLight(0xffffdd, 0, 25, Math.PI / 10, 0.4, 1.5);
-            pl.position.set(hCenter.x + 200, hCenter.y + 30, hCenter.z + side * offset);
-            const target = new THREE.Object3D();
-            target.position.set(hCenter.x - 30, hCenter.y, hCenter.z + side * offset);
-            clone.add(target);
-            pl.target = target;
+            // PointLight positionné devant la calandre (axe +X = arrière, -X = avant)
+            const pl = new THREE.PointLight(0xffffdd, 0, 30, 1.8);
+            pl.position.set(hCenter.x - 10, hCenter.y + 5, hCenter.z + side * offset);
             clone.add(pl);
             headlights.push(pl);
         }
