@@ -69,13 +69,11 @@ function _init() {
     // ShaderMaterial pour pouvoir faire varier la taille par vertex
     _ptMesh = new THREE.Points(_ptGeo, new THREE.ShaderMaterial({
         uniforms:       { map: { value: tex } },
-        vertexShader:   `precision highp float;
-                         attribute float size; attribute vec3 color; varying vec3 vCol; varying float vSize;
+        vertexShader:   `attribute float size; varying vec3 vCol; varying float vSize;
                          void main(){ vCol=color; vSize=size;
                            gl_PointSize=size;
                            gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
-        fragmentShader: `precision highp float;
-                         uniform sampler2D map; varying vec3 vCol; varying float vSize;
+        fragmentShader: `uniform sampler2D map; varying vec3 vCol; varying float vSize;
                          void main(){
                            vec4 t=texture2D(map,gl_PointCoord);
                            if(t.a<0.01) discard;

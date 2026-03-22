@@ -6,7 +6,6 @@ const VERT = `
     void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`;
 
 const FRAG = `
-    precision mediump float;
     uniform vec3  uColor;
     uniform float uOpacity;
     varying vec2  vUv;
