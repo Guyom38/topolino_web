@@ -1348,6 +1348,10 @@ function _loop() {
     renderer.render(_scene, _camera);
 }
 
+export function hideQRSign() {
+    if (_qrMesh) _qrMesh.visible = false;
+}
+
 export function disposeTitleScene() {
     _running = false;
     if (_animId) { cancelAnimationFrame(_animId); _animId = null; }

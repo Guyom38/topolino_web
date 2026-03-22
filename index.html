@@ -163,7 +163,7 @@
             position:relative;
             background:rgba(255,255,255,.035);
             border:1px solid rgba(255,255,255,.07);
-            border-radius:18px; padding:20px 16px 18px;
+            border-radius:18px; padding:10px 10px 16px;
             cursor:pointer; text-align:center; overflow:hidden;
             transition: transform .18s, border-color .18s, background .18s, box-shadow .18s;
         }
@@ -180,7 +180,15 @@
         }
         .mode-card:hover::before { opacity:1; }
         .mode-card:active { transform:translateY(-2px); }
-        .mode-card .icon  { font-size:38px; display:block; margin-bottom:10px; }
+        .mode-card .card-img-wrap {
+            width: 100%; aspect-ratio: 3/4; border-radius: 12px; overflow: hidden;
+            margin-bottom: 12px; background: rgba(0,0,0,0.3);
+        }
+        .mode-card .card-img {
+            width: 100%; height: 100%; object-fit: cover;
+            border-radius: 12px; transition: transform .35s ease;
+        }
+        .mode-card:hover .card-img { transform: scale(1.08); }
         .mode-card .name  { font-size:15px; font-weight:800; color:#fff; letter-spacing:.04em; }
         .mode-card .desc  { font-size:10px; color:rgba(255,255,255,.36); margin-top:7px; line-height:1.55; }
         .mode-card .badge {
@@ -205,15 +213,11 @@
         #game-ui.hidden { display:none; }
 
         #qr-wrap {
-            position:absolute; top:10px; right:10px;
-            background:rgba(255,255,255,.93); border-radius:10px;
-            padding:7px 7px 4px;
+            position:absolute; top:6px; right:6px;
             display:flex; flex-direction:column; align-items:center; gap:3px;
-            box-shadow:0 2px 14px rgba(0,0,0,.35);
+            pointer-events:none;
         }
-        #qr-canvas { width:80px; height:80px; }
-        #qr-label  { font-size:8px; color:#333; max-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-        #qr-hint   { font-size:10px; color:#555; font-weight:700; }
+        #qr-canvas, #qr-label, #qr-hint { display:none; }
 
         #fps-counter {
             position:absolute; top:10px; left:10px;
@@ -262,7 +266,7 @@
         #modes-overlay {
             position: absolute; left: 0; right: 0;
             top: calc(50% - 40px); transform: translateY(-52%);
-            display: flex; align-items: center; gap: 0;
+            display: flex; align-items: center; justify-content: center; gap: 0;
             padding: 0 14px; z-index: 2;
             opacity: 0; pointer-events: none;
             transition: opacity 0.45s 0.28s;
@@ -303,11 +307,11 @@
         }
 
         .mode-vig {
-            flex: 0 0 158px; min-height: 205px;
+            flex: 0 0 158px; min-height: 240px;
             background: rgba(4,8,20,0.84);
             backdrop-filter: blur(14px);
             border: 1px solid rgba(255,255,255,0.09);
-            border-radius: 18px; padding: 20px 13px 16px;
+            border-radius: 18px; padding: 10px 10px 14px;
             cursor: pointer; text-align: center;
             display: flex; flex-direction: column; align-items: center;
             transition: transform .2s, border-color .2s, background .2s, box-shadow .2s;
@@ -321,7 +325,60 @@
         .mode-vig:hover { transform: translateY(-7px) scale(1.04); border-color: rgba(255,200,0,.5); background: rgba(25,15,0,.88); box-shadow: 0 14px 45px rgba(0,0,0,.85), 0 0 0 1px rgba(255,200,0,.22), 0 0 35px rgba(255,170,0,.12); }
         .mode-vig:hover::before { opacity: 1; }
         .mode-vig:active { transform: translateY(-3px) scale(1.01); }
-        .mode-vig .v-icon { font-size: 40px; margin-bottom: 9px; line-height: 1; }
+        .mode-vig .v-img-wrap {
+            width: 100%; aspect-ratio: 3/4; border-radius: 10px; overflow: hidden;
+            margin-bottom: 10px; position: relative;
+            background: rgba(0,0,0,0.3);
+        }
+        .mode-vig .v-img {
+            width: 100%; height: 100%; object-fit: cover;
+            border-radius: 10px;
+            transition: transform .35s ease;
+        }
+        .mode-vig:hover .v-img { transform: scale(1.08); }
+        /* Mini titre bas-gauche quand les modes sont affichés */
+        #modes-mini-title {
+            position: absolute; bottom: 22px; left: 24px; z-index: 3;
+            display: flex; align-items: flex-end; gap: 16px;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.5s 0.4s;
+        }
+        #modes-mini-title.visible { opacity: 1; pointer-events: auto; }
+        .mini-text .mini-name {
+            font-family: 'Bebas Neue', 'Impact', 'Arial Black', sans-serif;
+            font-size: clamp(22px, 4vw, 36px);
+            line-height: 0.9; letter-spacing: 0.04em;
+            background: linear-gradient(175deg, #ffe566 0%, #ffaa00 40%, #ff5500 80%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text;
+            filter: drop-shadow(1px 1px 0px rgba(0,0,0,1)) drop-shadow(0 0 16px rgba(255,140,0,0.35));
+        }
+        .mini-text .mini-sub {
+            font-family: 'Bebas Neue', 'Impact', sans-serif;
+            font-size: clamp(8px, 1.4vw, 13px);
+            letter-spacing: 0.25em; color: rgba(255,255,255,0.55);
+            margin-top: -2px;
+            filter: drop-shadow(1px 1px 0px rgba(0,0,0,1));
+        }
+        /* QR incliné */
+        .mini-qr-diamond {
+            width: 92px; height: 92px;
+            transform: rotate(12deg);
+            border-radius: 10px; overflow: hidden;
+            background: #fff; padding: 6px;
+            box-shadow: 0 0 20px rgba(255,170,0,0.25), 0 4px 16px rgba(0,0,0,0.6);
+            flex-shrink: 0;
+            margin-bottom: 4px;
+        }
+        .mini-qr-diamond .mini-qr-inner {
+            width: 100%; height: 100%;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .mini-qr-hint {
+            font-size: 9px; color: rgba(255,255,255,0.35);
+            letter-spacing: 0.12em; margin-top: 4px;
+        }
+
         .mode-vig .v-name { font-family: 'Bebas Neue', Impact, 'Arial Black', sans-serif; font-size: 20px; letter-spacing: .07em; color: #fff; }
         .mode-vig .v-desc { font-size: 9.5px; color: rgba(255,255,255,.38); margin-top: 7px; line-height: 1.5; flex: 1; }
         .mode-vig .v-badge { position: absolute; top: 9px; right: 9px; background: #ff6b1c; color: #fff; font-size: 7px; font-weight: 900; padding: 2px 7px; border-radius: 20px; letter-spacing: .1em; text-transform: uppercase; }
@@ -368,6 +425,15 @@
         <div class="title-sub">LA CAISSE À MA MÈRE</div>
         <div class="press-key">Appuyez sur une touche</div>
     </div>
+    <!-- Mini titre bas-gauche (visible quand les modes apparaissent) -->
+    <div id="modes-mini-title">
+        <div class="mini-qr-diamond"><div class="mini-qr-inner" id="mini-qr"></div></div>
+        <div class="mini-text">
+            <div class="mini-name">TOPOLINO</div>
+            <div class="mini-sub">LA CAISSE À MA MÈRE</div>
+            <div class="mini-qr-hint">Rejoindre</div>
+        </div>
+    </div>
     <!-- Vignettes modes — apparaissent sur le terre-plein après le clic -->
     <div id="modes-overlay">
         <button class="modes-arrow" id="modes-prev" onclick="_modesPrev()" aria-label="Précédent">◀</button>
@@ -390,57 +456,9 @@
         <div class="menu-tagline">Choisissez votre mode de jeu</div>
     </div>
 
-    <div class="modes-grid">
-        <div class="mode-card" onclick="go('drive')">
-            <span class="icon">🏔</span>
-            <div class="name">Conduite Libre</div>
-            <div class="desc">Terrain infini avec relief, montagnes et physique drift</div>
-        </div>
-        <div class="mode-card" onclick="go('circuit')">
-            <span class="icon">🏁</span>
-            <div class="name">Circuit</div>
-            <div class="desc">Course sur circuit — feux, caméra leader, 5 pts pour gagner</div>
-            <span class="badge">NEW</span>
-        </div>
-        <div class="mode-card" onclick="go('chase')">
-            <span class="icon">🧳</span>
-            <div class="name">Poursuite</div>
-            <div class="desc">Vole la valise et garde-la le plus longtemps possible !</div>
-        </div>
-        <div class="mode-card" onclick="go('parking')">
-            <span class="icon">🅿</span>
-            <div class="name">Parking</div>
-            <div class="desc">Gare ta voiture dans les emplacements en un minimum de temps</div>
-        </div>
-        <div class="mode-card" onclick="go('tron')">
-            <span class="icon">🌀</span>
-            <div class="name">Tron</div>
-            <div class="desc">Trace des murs lumineux — évite-les pour survivre !</div>
-        </div>
-        <div class="mode-card" onclick="go('derby')">
-            <span class="icon">💥</span>
-            <div class="name">Derby</div>
-            <div class="desc">Pousse tes adversaires hors de l'arène circulaire</div>
-        </div>
-        <div class="mode-card" onclick="go('battle')">
-            <span class="icon">🎈</span>
-            <div class="name">Battle Ballons</div>
-            <div class="desc">Crève tous les ballons de tes adversaires avant eux</div>
-        </div>
-        <div class="mode-card" onclick="go('foot')">
-            <span class="icon">⚽</span>
-            <div class="name">Football</div>
-            <div class="desc">Deux équipes, un ballon géant — marquez des buts !</div>
-        </div>
-    </div>
+    <div class="modes-grid" id="menu-modes-grid"></div>
 
     <div class="menu-footer">
-        <div class="menu-qr-wrap" id="menu-qr"></div>
-        <div>
-            <div id="menu-qr-url" style="font-size:11px;color:rgba(255,255,255,.38)">chargement…</div>
-            <div style="font-size:11px;color:rgba(255,255,255,.18);margin-top:3px">📱 Scannez pour jouer sur mobile</div>
-        </div>
-        <div class="sep"></div>
         <div>
             <div style="font-size:12px;color:rgba(255,255,255,.32)">🎮 Manettes USB détectées automatiquement</div>
             <div style="font-size:11px;color:rgba(255,255,255,.18);margin-top:3px">F5 pour relancer le même mode · D pour debug caméra</div>
@@ -529,14 +547,14 @@ function _showTitle() {
 
 /* ── Vignettes de modes sur le terre-plein ─────────────────── */
 const _MODES = [
-    { icon:'🏔', name:'Conduite Libre',  desc:'Terrain infini, montagnes et physique drift',             mode:'drive' },
-    { icon:'🏁', name:'Circuit',         desc:'Course sur circuit — feux, caméra leader, 5 pts',         mode:'circuit', badge:'NEW' },
-    { icon:'🧳', name:'Poursuite',        desc:'Vole la valise et garde-la le plus longtemps !',          mode:'chase' },
-    { icon:'🅿',  name:'Parking',         desc:'Gare ta voiture dans les emplacements en un min',         mode:'parking' },
-    { icon:'🌀', name:'Tron',             desc:'Trace des murs lumineux — évite-les pour survivre',       mode:'tron' },
-    { icon:'💥', name:'Derby',            desc:'Pousse tes adversaires hors de l\'arène circulaire',      mode:'derby' },
-    { icon:'🎈', name:'Battle Ballons',   desc:'Crève les ballons de tes adversaires avant eux',          mode:'battle' },
-    { icon:'⚽', name:'Football',         desc:'Deux équipes, un ballon géant — marquez des buts !',      mode:'foot' },
+    { img:'Asssets/modes/libre.png',   name:'Conduite Libre',  desc:'Terrain infini, montagnes et physique drift',             mode:'drive' },
+    { img:'Asssets/modes/racing.png',  name:'Circuit',         desc:'Course sur circuit — feux, caméra leader, 5 pts',         mode:'circuit', badge:'NEW' },
+    { img:'Asssets/modes/new.png',     name:'Poursuite',       desc:'Vole la valise et garde-la le plus longtemps !',           mode:'chase' },
+    { img:'Asssets/modes/parking.png', name:'Parking',         desc:'Gare ta voiture dans les emplacements en un min',         mode:'parking' },
+    { img:'Asssets/modes/tron.png',    name:'Tron',            desc:'Trace des murs lumineux — évite-les pour survivre',       mode:'tron' },
+    { img:'Asssets/modes/derby.png',   name:'Derby',           desc:'Pousse tes adversaires hors de l\'arène circulaire',      mode:'derby' },
+    { img:'Asssets/modes/new.png',     name:'Battle Ballons',  desc:'Crève les ballons de tes adversaires avant eux',          mode:'battle' },
+    { img:'Asssets/modes/foot.png',    name:'Football',        desc:'Deux équipes, un ballon géant — marquez des buts !',      mode:'foot' },
 ];
 let _modesOff = 0;
 
@@ -565,14 +583,18 @@ function _showModesOverlay() {
     track.innerHTML = _MODES.map(m => `
         <div class="mode-vig" onclick="go('${m.mode}')" onmouseenter="_playTick()">
             ${m.badge ? `<span class="v-badge">${m.badge}</span>` : ''}
-            <span class="v-icon">${m.icon}</span>
+            <div class="v-img-wrap"><img class="v-img" src="${m.img}" alt="${m.name}" onerror="this.src='Asssets/modes/new.png'"></div>
             <div class="v-name">${m.name}</div>
             <div class="v-desc">${m.desc}</div>
         </div>`).join('');
     const ov = document.getElementById('modes-overlay');
     requestAnimationFrame(() => requestAnimationFrame(() => {
         ov.classList.add('visible');
+        document.getElementById('modes-mini-title')?.classList.add('visible');
+        _generateMiniQR();
         _modesRefresh();
+        // Cacher le QR 3D sur le terre-plein
+        import('./src/titleScene.js').then(m => m.hideQRSign && m.hideQRSign()).catch(() => {});
     }));
 }
 
@@ -596,7 +618,30 @@ function _playVideo() {
 /* ── Menu principal ───────────────────────────────────────────── */
 function _showMenu() {
     document.getElementById('menu-screen').classList.remove('hidden');
+    _buildMenuGrid();
     _generateMenuQR();
+}
+
+function _buildMenuGrid() {
+    const grid = document.getElementById('menu-modes-grid');
+    if (!grid || grid.children.length) return;
+    const descs = {
+        drive:   'Terrain infini avec relief, montagnes et physique drift',
+        circuit: 'Course sur circuit — feux, caméra leader, 5 pts pour gagner',
+        chase:   'Vole la valise et garde-la le plus longtemps possible !',
+        parking: 'Gare ta voiture dans les emplacements en un minimum de temps',
+        tron:    'Trace des murs lumineux — évite-les pour survivre !',
+        derby:   'Pousse tes adversaires hors de l\'arène circulaire',
+        battle:  'Crève tous les ballons de tes adversaires avant eux',
+        foot:    'Deux équipes, un ballon géant — marquez des buts !',
+    };
+    grid.innerHTML = _MODES.map(m => `
+        <div class="mode-card" onclick="go('${m.mode}')" onmouseenter="_playTick()">
+            ${m.badge ? `<span class="badge">${m.badge}</span>` : ''}
+            <div class="card-img-wrap"><img class="card-img" src="${m.img}" alt="${m.name}" onerror="this.src='Asssets/modes/new.png'"></div>
+            <div class="name">${m.name}</div>
+            <div class="desc">${descs[m.mode] || m.desc}</div>
+        </div>`).join('');
 }
 
 function _generateMenuQR() {
@@ -612,6 +657,19 @@ function _generateMenuQR() {
                     colorDark: '#000', colorLight: '#fff', correctLevel: QRCode.CorrectLevel.M });
             }
             if (lbl) lbl.textContent = url.replace(/^https?:\/\//, '');
+        })
+        .catch(() => {});
+}
+
+function _generateMiniQR() {
+    if (typeof QRCode === 'undefined') { setTimeout(_generateMiniQR, 300); return; }
+    const el = document.getElementById('mini-qr');
+    if (!el || el.firstChild) return;
+    fetch('/api/info')
+        .then(r => r.json())
+        .then(d => {
+            new QRCode(el, { text: d.server_url + '/mobile', width: 80, height: 80,
+                colorDark: '#000', colorLight: '#fff', correctLevel: QRCode.CorrectLevel.M });
         })
         .catch(() => {});
 }
@@ -673,10 +731,10 @@ function go(mode) {
     }
 }
 
-/* ── Son de hover sur les cartes de mode ─────────────────────── */
-document.querySelectorAll('.mode-card').forEach(card => {
-    card.addEventListener('mouseenter', _playTick, { passive: true });
-});
+/* ── Son de hover sur les cartes de mode (délégation) ──────── */
+document.addEventListener('mouseenter', e => {
+    if (e.target.closest && e.target.closest('.mode-card')) _playTick();
+}, { capture: true, passive: true });
 
 /* ── Toggle debug caméra (touche D) ──────────────────────────── */
 document.addEventListener('keydown', e => {
