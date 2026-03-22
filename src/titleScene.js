@@ -983,7 +983,7 @@ function _createHaloTexture() {
 
 function _createStreetLights() {
     const POLE_H    = 3.8;      // hauteur totale du poteau
-    const LAMP_POSITIONS = [-12, 12]; // un lampadaire de chaque côté
+    const LAMP_POSITIONS = [-15, 15]; // Rapprochés pour mieux cadrer le titre
     const Z_LINE    = (ROAD_TOP_Z + 6 + ROAD_BOT_Z - 4.2) / 2; // centre du terre-plein
 
     // Matériaux partagés
