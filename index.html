@@ -213,11 +213,15 @@
         #game-ui.hidden { display:none; }
 
         #qr-wrap {
-            position:absolute; top:6px; right:6px;
-            display:flex; flex-direction:column; align-items:center; gap:3px;
-            pointer-events:none;
+            position:absolute; top:8px; right:8px;
+            background:rgba(255,255,255,.93); border-radius:10px;
+            padding:6px 6px 3px;
+            display:flex; flex-direction:column; align-items:center; gap:2px;
+            box-shadow:0 2px 14px rgba(0,0,0,.35);
         }
-        #qr-canvas, #qr-label, #qr-hint { display:none; }
+        #qr-canvas { width:72px; height:72px; }
+        #qr-label  { font-size:7px; color:#333; max-width:72px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        #qr-hint   { font-size:9px; color:#555; font-weight:700; }
 
         #fps-counter {
             position:absolute; top:10px; left:10px;
@@ -379,6 +383,25 @@
             letter-spacing: 0.12em; margin-top: 4px;
         }
 
+        .vote-bullets {
+            position: absolute; bottom: 100%; left: 50%;
+            transform: translateX(-50%);
+            display: flex; flex-wrap: wrap-reverse; justify-content: center; gap: 5px;
+            padding: 0 4px 6px; pointer-events: none; z-index: 10;
+            max-width: 140px;
+        }
+        .vote-bullet {
+            width: 18px; height: 18px; border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.7);
+            box-shadow: 0 0 8px currentColor, 0 0 16px currentColor, 0 2px 6px rgba(0,0,0,0.5);
+            transition: transform 0.25s, opacity 0.25s;
+            animation: bulletPop 0.3s ease-out;
+        }
+        @keyframes bulletPop {
+            0%   { transform: scale(0); opacity: 0; }
+            60%  { transform: scale(1.3); }
+            100% { transform: scale(1); opacity: 1; }
+        }
         .mode-vig .v-name { font-family: 'Bebas Neue', Impact, 'Arial Black', sans-serif; font-size: 20px; letter-spacing: .07em; color: #fff; }
         .mode-vig .v-desc { font-size: 9.5px; color: rgba(255,255,255,.38); margin-top: 7px; line-height: 1.5; flex: 1; }
         .mode-vig .v-badge { position: absolute; top: 9px; right: 9px; background: #ff6b1c; color: #fff; font-size: 7px; font-weight: 900; padding: 2px 7px; border-radius: 20px; letter-spacing: .1em; text-transform: uppercase; }
@@ -555,7 +578,7 @@
 // ════════════════════════════════════════════════════════════════
 const MODE = new URLSearchParams(location.search).get('mode');
 
-/* ── Plein écran au premier geste utilisateur ──────────────────── */
+/* ── Plein écran ──────────────────────────────────────────────── */
 function _goFullscreen() {
     const el = document.documentElement;
     const rfs = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
@@ -563,16 +586,6 @@ function _goFullscreen() {
         rfs.call(el).catch(() => {});
     }
 }
-// Déclencher au premier clic ou touche (nécessaire geste utilisateur)
-function _onFirstInteraction() {
-    _goFullscreen();
-    document.removeEventListener('click', _onFirstInteraction, true);
-    document.removeEventListener('keydown', _onFirstInteraction, true);
-    document.removeEventListener('touchstart', _onFirstInteraction, true);
-}
-document.addEventListener('click', _onFirstInteraction, { capture: true, once: false });
-document.addEventListener('keydown', _onFirstInteraction, { capture: true, once: false });
-document.addEventListener('touchstart', _onFirstInteraction, { capture: true, once: false });
 
 // Démarrage direct via URL (?mode=xxx) — F5 ou lien direct
 if (MODE) {
@@ -591,6 +604,7 @@ function _showTitle() {
     const _reveal = () => {
         if (!armed || shown) return;
         shown = true;
+        _goFullscreen();
         document.removeEventListener('keydown', _onTitleKey);
         el.style.cursor = 'default';
         _playTick();
@@ -671,16 +685,51 @@ function _showModesOverlay() {
         </div>`).join('');
 
     track.innerHTML = randomCard + sep + modeCards;
+
+    // Conteneur de bullets de vote au-dessus de chaque vignette
+    document.querySelectorAll('.mode-vig[data-lottery]').forEach(vig => {
+        const bw = document.createElement('div');
+        bw.className = 'vote-bullets';
+        vig.appendChild(bw);
+    });
+
     const ov = document.getElementById('modes-overlay');
     requestAnimationFrame(() => requestAnimationFrame(() => {
         ov.classList.add('visible');
         document.getElementById('modes-mini-title')?.classList.add('visible');
         _generateMiniQR();
         _modesRefresh();
-        // Cacher le QR 3D sur le terre-plein
         import('./src/titleScene.js').then(m => m.hideQRSign && m.hideQRSign()).catch(() => {});
     }));
 }
+
+/* ── Vote joueurs : bullets colorés au-dessus des vignettes ──── */
+let _prevVoteState = '';
+
+window._updateModeVotes = function(votes, totalPlayers) {
+    if (!totalPlayers) return;
+    const vigs = document.querySelectorAll('.mode-vig[data-lottery]');
+
+    vigs.forEach((vig, modeIdx) => {
+        const wrap = vig.querySelector('.vote-bullets');
+        if (!wrap) return;
+
+        const voters = votes.filter(v => v.modeIndex === modeIdx);
+        // Hash local pour ne pas recréer si rien n'a changé
+        const key = voters.map(v => v.color).sort().join(',');
+        if (wrap.dataset.vk === key) return;
+        wrap.dataset.vk = key;
+
+        wrap.innerHTML = '';
+        for (const v of voters) {
+            const dot = document.createElement('div');
+            dot.className = 'vote-bullet';
+            dot.style.background = v.color;
+            dot.style.color = v.color; // pour currentColor dans box-shadow
+            wrap.appendChild(dot);
+        }
+    });
+};
 
 /* ── Loterie de mode ──────────────────────────────────────────── */
 function _startLottery() {
@@ -858,6 +907,7 @@ function _playClick() {          // clic de sélection
 /* ── Lancer un mode SANS rechargement de page ─────────────────── */
 /* Le clic reste dans la chaîne du geste → autoplay audio garanti */
 function go(mode) {
+    _goFullscreen();
     _playClick();   // son de clic immédiat (débloque l'audio context)
 
     // Masquer les écrans de navigation

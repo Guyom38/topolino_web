@@ -221,13 +221,13 @@ function _getFreeCar() {
 }
 
 function _createNameSprite(text, color) {
-    const W = 256, H = 64;
+    const W = 512, H = 128;
     const cv = document.createElement('canvas');
     cv.width = W; cv.height = H;
     _drawNameTag(cv, text, color, 0);
     const tex    = new THREE.CanvasTexture(cv);
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
-    sprite.scale.set(4.8, 1.2, 1.0);
+    sprite.scale.set(5.0, 1.25, 1.0);
     sprite.renderOrder = 9999;
     sprite.userData._canvas = cv;
     sprite.userData._text   = text;
@@ -243,19 +243,19 @@ function _drawNameTag(cv, text, color, arrowAngle) {
     ctx.clearRect(0, 0, W, H);
 
     const cy = H / 2;
-    const arrowR = 11;
-    const arrowSpace = arrowR * 2 + 8;
+    const arrowR = 20;
+    const arrowSpace = arrowR * 2 + 14;
 
-    ctx.font = 'bold 28px Arial';
+    ctx.font = 'bold 52px Arial';
     const tw = ctx.measureText(text.slice(0, 14)).width;
-    const pw = tw + arrowSpace + 28, ph = 38, r = ph / 2;
+    const pw = tw + arrowSpace + 48, ph = 72, r = ph / 2;
     const px = (W - pw) / 2;
 
     // Ombre portée
     ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.5)';
-    ctx.shadowBlur = 10;
-    ctx.shadowOffsetY = 3;
+    ctx.shadowColor = 'rgba(0,0,0,0.6)';
+    ctx.shadowBlur = 16;
+    ctx.shadowOffsetY = 4;
     ctx.beginPath();
     ctx.roundRect(px, cy - ph / 2, pw, ph, r);
     ctx.fillStyle = color;
@@ -265,12 +265,12 @@ function _drawNameTag(cv, text, color, arrowAngle) {
     // Bordure blanche
     ctx.beginPath();
     ctx.roundRect(px, cy - ph / 2, pw, ph, r);
-    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+    ctx.lineWidth = 3;
     ctx.stroke();
 
     // ── Flèche dans le pill (à gauche du texte) ──
-    const arrowCx = px + r + 2;
+    const arrowCx = px + r + 4;
     ctx.save();
     ctx.translate(arrowCx, cy);
     ctx.rotate(-arrowAngle + Math.PI / 2);
@@ -280,23 +280,23 @@ function _drawNameTag(cv, text, color, arrowAngle) {
     ctx.lineTo(0, arrowR * 0.15);
     ctx.lineTo(arrowR * 0.65, arrowR * 0.5);
     ctx.closePath();
-    ctx.strokeStyle = 'rgba(0,0,0,0.6)';
-    ctx.lineWidth = 4;
+    ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+    ctx.lineWidth = 6;
     ctx.stroke();
     ctx.fillStyle = '#fff';
     ctx.fill();
     ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = 2;
     ctx.stroke();
     ctx.restore();
 
-    // Texte (décalé à droite de la flèche)
-    const textCx = arrowCx + arrowR + 4 + tw / 2;
-    ctx.font         = 'bold 28px Arial';
+    // Texte
+    const textCx = arrowCx + arrowR + 6 + tw / 2;
+    ctx.font         = 'bold 52px Arial';
     ctx.textAlign    = 'center';
     ctx.textBaseline = 'middle';
-    ctx.strokeStyle  = 'rgba(0,0,0,0.7)';
-    ctx.lineWidth    = 4;
+    ctx.strokeStyle  = 'rgba(0,0,0,0.8)';
+    ctx.lineWidth    = 7;
     ctx.strokeText(text.slice(0, 14), textCx, cy);
     ctx.fillStyle = '#fff';
     ctx.fillText(text.slice(0, 14), textCx, cy);
@@ -329,7 +329,7 @@ function _spawnMiniCar(gpIndex) {
     _scene.add(root);
     const sprite = _createNameSprite(`P${gpIndex + 1}`, color);
     _miniCars.set(gpIndex, {
-        root, x: startX, z: MINI_Z,
+        root, x: startX, z: MINI_Z, color,
         vx: 0, vz: 0, angle: Math.PI, // face à gauche comme les voitures du bas
         sprite, keys: { left: false, right: false, up: false, down: false },
     });
@@ -341,7 +341,7 @@ function _claimCar(id, name, color, keys) {
     if (!c) return;
     c.root.scale.setScalar(2.0);
     const sprite = _createNameSprite(name, color);
-    _titlePlayerCars.set(id, { c, sprite, keys });
+    _titlePlayerCars.set(id, { c, sprite, keys, color });
 }
 
 function _getPlayerEntry(c) {
@@ -1425,7 +1425,68 @@ function _loop() {
         _updateNameSprite(sprite, c.angle, c.x, c.z);
     }
 
+    // ── Détection des votes joueurs sur les vignettes de mode ──────────────
+    _detectModeVotes();
+
     renderer.render(_scene, _camera);
+}
+
+const _v3 = new THREE.Vector3();
+function _projectToScreenX(wx, wz) {
+    _v3.set(wx, 0, wz);
+    _v3.project(_camera);
+    return (_v3.x * 0.5 + 0.5) * window.innerWidth;
+}
+
+let _lastVoteHash = '';
+function _detectModeVotes() {
+    const ov = document.getElementById('modes-overlay');
+    if (!ov || !ov.classList.contains('visible')) return;
+
+    const vigs = ov.querySelectorAll('.mode-vig[data-lottery]');
+    if (!vigs.length) return;
+
+    // Collecter tous les joueurs actifs (mini-cars manettes + joueurs mobile/clavier)
+    const players = [];
+    for (const [, mc] of _miniCars) {
+        players.push({ x: mc.x, z: mc.z, color: mc.color });
+    }
+    for (const [, { c, color }] of _titlePlayerCars) {
+        players.push({ x: c.x, z: c.z, color });
+    }
+    if (!players.length) return;
+
+    // Bounding rects des vignettes
+    const rects = [];
+    for (const vig of vigs) {
+        const r = vig.getBoundingClientRect();
+        rects.push({ left: r.left, right: r.right });
+    }
+
+    // Associer chaque joueur à une vignette par projection X (plus proche)
+    const votes = [];
+    for (let s = 0; s < players.length; s++) {
+        const p = players[s];
+        const sx = _projectToScreenX(p.x, p.z);
+        let best = -1, bestDist = Infinity;
+        for (let i = 0; i < rects.length; i++) {
+            const mid = (rects[i].left + rects[i].right) / 2;
+            const halfW = (rects[i].right - rects[i].left) / 2;
+            const d = Math.abs(sx - mid);
+            // Match si dans la vignette ou à proximité (1.5× la largeur)
+            if (d < halfW * 1.5 && d < bestDist) {
+                bestDist = d; best = i;
+            }
+        }
+        votes.push({ slot: s, color: p.color, modeIndex: best });
+    }
+
+    // Hash rapide pour éviter de redessiner chaque frame
+    const hash = votes.map(v => `${v.slot}:${v.modeIndex}`).join(',');
+    if (hash === _lastVoteHash) return;
+    _lastVoteHash = hash;
+
+    if (window._updateModeVotes) window._updateModeVotes(votes, players.length);
 }
 
 export function hideQRSign() {
