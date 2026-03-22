@@ -500,12 +500,17 @@ function _buildCar(fbxTemplate, color, isPolice = false) {
         const hHalfWL = new THREE.Vector3();
         headlightMesh.localToWorld(hHalfWL.copy(hBox.min));
         clone.worldToLocal(hHalfWL);
-        const offset = Math.max(Math.abs(hHalfW.x - hHalfWL.x) * 0.28, 0.25);
+        const offset = 40; // séparation gauche/droite sur axe Z
 
         for (const side of [-1, 1]) {
-            const pl = new THREE.PointLight(0xffffdd, 0, 6, 1.8);
-            // Légèrement devant le mesh des vitres pour le halo
-            pl.position.set(hCenter.x + side * offset, hCenter.y + 0.05, hCenter.z - 0.15);
+            // SpotLight dirigé vers l'avant (-X) comme de vrais phares
+            // hCenter = centre calandre, séparation gauche/droite sur Z
+            const pl = new THREE.SpotLight(0xffffdd, 0, 25, Math.PI / 10, 0.4, 1.5);
+            pl.position.set(hCenter.x + 200, hCenter.y + 30, hCenter.z + side * offset);
+            const target = new THREE.Object3D();
+            target.position.set(hCenter.x - 30, hCenter.y, hCenter.z + side * offset);
+            clone.add(target);
+            pl.target = target;
             clone.add(pl);
             headlights.push(pl);
         }
@@ -1289,17 +1294,17 @@ function _updateDayNight(now) {
     _scene.background.copy(_tmpC);
 
     // Intensité et couleur soleil
-    _sun.intensity = THREE.MathUtils.lerp(0.08, 1.9, dayFactor);
+    _sun.intensity = THREE.MathUtils.lerp(0.18, 1.9, dayFactor);
     _tmpC.copy(_sunNight).lerp(_sunDay, dayFactor);
     if (duskFactor > 0) _tmpC.lerp(_sunDusk, duskFactor * 0.7);
     _sun.color.copy(_tmpC);
 
     // Ambiante
-    _ambient.intensity = THREE.MathUtils.lerp(0.08, 0.6, dayFactor);
+    _ambient.intensity = THREE.MathUtils.lerp(0.22, 0.6, dayFactor);
     _ambient.color.copy(_ambNight).lerp(_ambDay, dayFactor);
 
     // Fill light
-    _fill.intensity = THREE.MathUtils.lerp(0.05, 0.35, dayFactor);
+    _fill.intensity = THREE.MathUtils.lerp(0.15, 0.35, dayFactor);
     _fill.color.copy(_fillNight).lerp(_fillDay, dayFactor);
 
     // Facteur nuit global (utilisé par les feux stop/recul)
