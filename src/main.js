@@ -8,7 +8,7 @@ import { initUI, updateUI, setPlayerScore } from './ui.js';
 import { initChaseRocks, collidables, bushes } from './rocks.js';
 import { updateSparks } from './sparks.js';
 import { updateSmoke }  from './smoke.js';
-import { startMusic }   from './music.js';
+import { startTitleMusic, startRandomRadio, stopMusic } from './audio.js';
 import { updateOffscreenArrows, disposeOffscreenArrows } from './offscreen.js';
 import { initTitleScene, disposeTitleScene } from './titleScene.js';
 
@@ -36,7 +36,7 @@ function _updateFps() {
 // ── Mode normal (conduite libre) ──────────────────────────────────────────────
 async function startDriveMode(shouldRun) {
     initUI();
-    startMusic();
+    startRandomRadio();
     await initMultiplayer();
     updateTerrain(0); // initialiser les patches dès le départ (spawn différé)
 
@@ -91,7 +91,7 @@ async function startParkingMode(shouldRun) {
         await import('./parking/ParkingMode.js');
 
     initUI();
-    startMusic();
+    startRandomRadio();
     await initMultiplayer();
     await initParkingMode(players);
 
@@ -138,7 +138,7 @@ async function startParkingMode(shouldRun) {
 // ── Mode poursuite (bagage) ───────────────────────────────────────────────────
 async function startChaseMode(shouldRun) {
     initUI();
-    startMusic();
+    startRandomRadio();
     await initMultiplayer();
     
     refreshTerrain();
@@ -213,7 +213,7 @@ async function startTronMode(shouldRun) {
     const { createAura: mkAura } = await import('./aura.js');
 
     initUI();
-    startMusic();
+    startRandomRadio();
     await initMultiplayer();
 
     // Force-loader les voitures (le spawn différé ne marche pas en arène)
@@ -264,7 +264,7 @@ async function startDerbyMode(shouldRun) {
         await import('./modes/DerbyMode.js');
 
     initUI();
-    startMusic();
+    startRandomRadio();
     await initMultiplayer();
     await initDerbyMode(players);
 
@@ -308,7 +308,7 @@ async function startBattleMode(shouldRun) {
         await import('./modes/BattleMode.js');
 
     initUI();
-    startMusic();
+    startRandomRadio();
     await initMultiplayer();
     await initBattleMode(players);
     updateTerrain(0); // initialiser les patches dès le départ (spawn différé)
@@ -362,7 +362,7 @@ async function startFootMode(shouldRun) {
         await import('./modes/FootMode.js');
 
     initUI();
-    startMusic();
+    startRandomRadio();
     await initMultiplayer();
     await initFootMode(players);
 
@@ -401,7 +401,7 @@ async function startCircuitMode(shouldRun) {
         await import('./modes/CircuitMode.js');
 
     initUI();
-    startMusic();
+    startRandomRadio();
     await initMultiplayer();
     await initCircuitMode(players);
 
@@ -451,6 +451,7 @@ const LABELS_MAP = {
 let _currentLoopId = 0;
 
 function _launchMode(mode) {
+    stopMusic(); // Arrêter la musique précédente
     _currentLoopId++;
     const loopId = _currentLoopId;
 
@@ -488,4 +489,5 @@ if (MODE) {
 } else {
     // Page de titre → lancer les Topolino 3D en arrière-plan
     initTitleScene();
+    startTitleMusic();
 }
