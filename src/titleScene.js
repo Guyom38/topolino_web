@@ -56,11 +56,13 @@ const PARK_DURATION_MAX = 40000; // 40s maximum
 const PARK_APPROACH = 15;    // distance pour repérer une place
 const PARK_SNAP     = 1.5;   // distance de snap pour se garer
 
-let _scene    = null;
-let _camera   = null;
-let _cars     = [];
-let _running  = false;
-let _animId   = null;
+let _scene       = null;
+let _camera      = null;
+let _cars        = [];
+let _running     = false;
+let _animId      = null;
+let _fbxTemplate = null;  // référence au template FBX pour les mini-voitures
+let _qrMesh      = null;
 
 // ── Contrôle joueurs sur la page de titre ────────────────────────────────────
 const _titlePlayerCars = new Map(); // id → { c, sprite, keys }
@@ -72,6 +74,14 @@ let   _titleOnKeyUp    = null;
 let   _titleSock       = null;
 const _gpClaimed       = new Set();
 const _TITLE_COLORS    = ['#B7D1C4','#ff6b1c','#4499ff','#cc44ff','#ffcc00','#ff3344','#44dd88','#ffaa44'];
+
+// ── Mini-voitures manette (trottoir du bas) ───────────────────────────────────
+const _miniCars      = new Map(); // gpIndex → { root, x, z, vx, vz, angle, sprite, keys }
+const MINI_SCALE     = 0.20;      // 20% de la taille normale
+const MINI_Z         = -0.9;      // Z pelouse centrale (entre les deux routes)
+const MINI_THRUST    = 0.007;
+const MINI_MAX_SPD   = 0.22;
+const MINI_DRAG      = 0.93;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  SAT – Séparation d'axe pour deux OBB 2D (plan XZ)
@@ -153,6 +163,34 @@ function _resolveOBB(a, b) {
     }
 }
 
+/** Collision cercle entre mini-voitures et voitures IA */
+function _resolveMiniCollisions() {
+    const CONTACT = CAR_HL * (1 + MINI_SCALE); // ~2.28 : somme des rayons approx
+    for (const mc of _miniCars.values()) {
+        for (const c of _cars) {
+            if (c.parkState === 'parked') continue;
+            const dx = mc.x - c.x, dz = mc.z - c.z;
+            const dist = Math.hypot(dx, dz);
+            if (dist > CONTACT || dist < 0.001) continue;
+            const nx = dx / dist, nz = dz / dist;
+            const overlap = CONTACT - dist;
+            // Mini car expulsée, IA car légèrement repoussée
+            mc.x += nx * overlap * 0.85;
+            mc.z += nz * overlap * 0.85;
+            c.x  -= nx * overlap * 0.15;
+            c.z  -= nz * overlap * 0.15;
+            // Rebond mini car + légère perturbation IA
+            const vn = (mc.vx - c.vx) * nx + (mc.vz - c.vz) * nz;
+            if (vn < 0) {
+                mc.vx -= vn * 1.4 * nx;
+                mc.vz -= vn * 1.4 * nz;
+                c.vx  += vn * 0.15 * nx;
+                c.vz  += vn * 0.15 * nz;
+            }
+        }
+    }
+}
+
 /** Résout toutes les paires O(n²) – 22 voitures = 231 tests, très léger */
 function _resolveAll() {
     const n = _cars.length;
@@ -198,6 +236,25 @@ function _createNameSprite(text, color) {
     sprite.scale.set(4.0, 1.0, 1.0);
     if (_scene) _scene.add(sprite);
     return sprite;
+}
+
+function _spawnMiniCar(gpIndex) {
+    if (_miniCars.has(gpIndex) || !_scene || !_fbxTemplate) return;
+    const color    = _TITLE_COLORS[_miniCars.size % _TITLE_COLORS.length];
+    const colorInt = parseInt(color.replace('#', ''), 16);
+    const root = new THREE.Group();
+    const { group: carGroup } = _buildCar(_fbxTemplate, colorInt);
+    root.add(carGroup);
+    root.scale.setScalar(MINI_SCALE);
+    const startX = (Math.random() - 0.5) * 40;
+    root.position.set(startX, 0, MINI_Z);
+    _scene.add(root);
+    const sprite = _createNameSprite(`P${gpIndex + 1}`, color);
+    _miniCars.set(gpIndex, {
+        root, x: startX, z: MINI_Z,
+        vx: 0, vz: 0, angle: Math.PI, // face à gauche comme les voitures du bas
+        sprite, keys: { left: false, right: false, up: false, down: false },
+    });
 }
 
 function _claimCar(id, name, color, keys) {
@@ -538,6 +595,39 @@ function _createRoadTexture(seed, withParking = false, withCrossing = false) {
     return cv;
 }
 
+function _createQRSign(url) {
+    if (typeof QRCode === 'undefined') return;
+    // QRCode.js doit être dans le DOM pour fonctionner
+    const div = document.createElement('div');
+    div.style.cssText = 'position:fixed;left:-9999px;top:0;pointer-events:none;';
+    document.body.appendChild(div);
+    new QRCode(div, {
+        text: url, width: 240, height: 240,
+        colorDark: '#000000', colorLight: '#ffffff',
+        correctLevel: QRCode.CorrectLevel.M,
+    });
+    setTimeout(() => {
+        document.body.removeChild(div);
+        if (!_scene) return;
+        const SIZE = 256;
+        const cv  = document.createElement('canvas');
+        cv.width  = SIZE; cv.height = SIZE;
+        const ctx = cv.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, SIZE, SIZE);
+        const src = div.querySelector('canvas') || div.querySelector('img');
+        if (src) ctx.drawImage(src, 8, 8, 240, 240);
+        const tex = new THREE.CanvasTexture(cv);
+        const geo = new THREE.PlaneGeometry(4.0, 4.0);
+        const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide });
+        _qrMesh = new THREE.Mesh(geo, mat);
+        _qrMesh.rotation.x = -Math.PI / 2;
+        // Herbe droite du terre-plein, petite marge par rapport au bord visible (~±14 en X)
+        _qrMesh.position.set(11, 0.07, -0.9);
+        _scene.add(_qrMesh);
+    }, 400);
+}
+
 function _createRoads() {
     const ROAD_LEN    = 140;
     const ROAD_W_TOP  = 12;
@@ -611,12 +701,19 @@ export async function initTitleScene() {
     _createGrass();
     _createRoads();
 
+    // QR code à plat sur l'herbe (côté droit)
+    fetch('/api/info')
+        .then(r => r.json())
+        .then(d => _createQRSign(d.server_url + '/mobile'))
+        .catch(() => _createQRSign(window.location.origin + '/mobile'));
+
     let fbxTemplate;
     try {
         fbxTemplate = await new Promise((res, rej) =>
             new FBXLoader().load('Asssets/topolino_low49k.fbx', res, null, rej)
         );
     } catch (e) { console.warn('[TitleScene] FBX non chargé:', e); return; }
+    _fbxTemplate = fbxTemplate; // conservé pour les mini-voitures manette
 
     const policeColor = parseInt(POLICE_COLOR.replace('#', ''), 16);
 
@@ -738,17 +835,18 @@ function _loop() {
             const idx = gp.index;
             if (!_gpClaimed.has(idx) && gp.buttons.some(b => b.pressed)) {
                 _gpClaimed.add(idx);
-                const col    = _nextPlayerColor();
-                const gpKeys = { left: false, right: false, up: false, down: false };
-                _claimCar(`gp_${idx}`, `Joueur ${_titlePlayerCars.size + 1}`, col, gpKeys);
+                _spawnMiniCar(idx); // mini-voiture sur le trottoir du bas
             }
-            const entry = _titlePlayerCars.get(`gp_${idx}`);
-            if (entry) {
+            const mc = _miniCars.get(idx);
+            if (mc) {
                 const ax0 = gp.axes[0] ?? 0;
-                entry.keys.left  = ax0 < -0.3;
-                entry.keys.right = ax0 >  0.3;
-                entry.keys.up    = (gp.buttons[7]?.value ?? 0) > 0.1 || (gp.axes[3] ?? 0) < -0.3;
-                entry.keys.down  = (gp.buttons[6]?.value ?? 0) > 0.1;
+                mc.keys.left  = ax0 < -0.15 || gp.buttons[14]?.pressed;
+                mc.keys.right = ax0 >  0.15 || gp.buttons[15]?.pressed;
+                mc.keys.up    = (gp.buttons[7]?.value ?? 0) > 0.1
+                              || (gp.axes[3] ?? 0) < -0.3
+                              || gp.buttons[0]?.pressed;
+                mc.keys.down  = (gp.buttons[6]?.value ?? 0) > 0.1
+                              || gp.buttons[1]?.pressed;
             }
         }
     }
@@ -797,6 +895,17 @@ function _loop() {
                 const zThresh = (parkManeuver || other._wantsLeave) ? 6.0 : 2.5;
                 if (ahead > 0 && ahead < LOOK_AHEAD + 4 && Math.abs(other.z - c.z) < zThresh) {
                     if (ahead < closestDist) { closestDist = ahead; closestCar = other; }
+                }
+            }
+
+            // Scanner aussi les mini-voitures comme obstacles
+            for (const mc of _miniCars.values()) {
+                const ahead = c.dir * (mc.x - c.x);
+                if (ahead > 0 && ahead < LOOK_AHEAD && Math.abs(mc.z - c.z) < 2.5) {
+                    if (ahead < closestDist) {
+                        closestDist = ahead;
+                        closestCar  = { vx: mc.vx, vz: 0, parkState: null, _wantsLeave: false };
+                    }
                 }
             }
 
@@ -1062,8 +1171,29 @@ function _loop() {
         c.root.rotation.y = c.angle;
     }
 
-    // ── Collisions OBB ───────────────────────────────────────────────────
+    // ── Mini-voitures manette (trottoir du bas) ───────────────────────────────
+    for (const mc of _miniCars.values()) {
+        if (mc.keys.left)  mc.angle += 0.07;
+        if (mc.keys.right) mc.angle -= 0.07;
+        if (mc.keys.up) {
+            mc.vx += Math.cos(mc.angle) * MINI_THRUST;
+            mc.vz -= Math.sin(mc.angle) * MINI_THRUST;
+        }
+        if (mc.keys.down) { mc.vx *= 0.80; mc.vz *= 0.80; }
+        mc.vx *= MINI_DRAG;
+        mc.vz *= MINI_DRAG;
+        const sp = Math.hypot(mc.vx, mc.vz);
+        if (sp > MINI_MAX_SPD) { mc.vx = mc.vx / sp * MINI_MAX_SPD; mc.vz = mc.vz / sp * MINI_MAX_SPD; }
+        mc.x += mc.vx;
+        mc.z += mc.vz;
+        mc.root.position.set(mc.x, 0, mc.z);
+        mc.root.rotation.y = mc.angle;
+        mc.sprite.position.set(mc.x, 1.6, mc.z);
+    }
+
+    // ── Collisions OBB + mini-voitures ───────────────────────────────────
     _resolveAll();
+    _resolveMiniCollisions();
     // Re-sync positions après séparation SAT
     const now = performance.now();
     for (const c of _cars) {
@@ -1097,10 +1227,31 @@ export function disposeTitleScene() {
     _titlePlayerCars.clear();
     _kbClaimed = false;
     _gpClaimed.clear();
+
+    // Nettoyer mini-voitures manette
+    for (const mc of _miniCars.values()) {
+        if (_scene) _scene.remove(mc.root);
+        if (mc.sprite) {
+            if (_scene) _scene.remove(mc.sprite);
+            mc.sprite.material.map?.dispose();
+            mc.sprite.material.dispose();
+        }
+    }
+    _miniCars.clear();
+    _fbxTemplate = null;
     Object.assign(_titleKbState, { left: false, right: false, up: false, down: false });
 
     // Déconnexion socket smartphone
     if (_titleSock) { _titleSock.disconnect(); _titleSock = null; }
+
+    // Nettoyer QR code
+    if (_qrMesh) {
+        _scene?.remove(_qrMesh);
+        _qrMesh.material.map?.dispose();
+        _qrMesh.material.dispose();
+        _qrMesh.geometry.dispose();
+        _qrMesh = null;
+    }
 
     // Nettoyer herbe
     if (_grassMesh) {
