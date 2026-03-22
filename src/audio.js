@@ -50,22 +50,32 @@ export function stopMusic() {
 }
 
 function _play(src, loop) {
-    if (_bgm) _bgm.pause();
+    if (_bgm) {
+        _bgm.pause();
+        _bgm.src = src;
+    } else {
+        _bgm = new Audio(src);
+    }
     
-    _bgm = new Audio(src);
     _bgm.loop = loop;
     _bgm.volume = 0.5;
     _currentTrack = src;
     
-    _bgm.play().catch(e => {
-        console.warn("[Audio] Lecture bloquée par le navigateur. Attente d'interaction.", e);
-        // On réessaye au premier clic sur le document
-        const retry = () => {
-            _bgm.play();
-            window.removeEventListener('click', retry);
-            window.removeEventListener('keydown', retry);
-        };
-        window.addEventListener('click', retry);
-        window.addEventListener('keydown', retry);
-    });
+    const attemptPlay = () => {
+        _bgm.play().then(() => {
+            // Lecture réussie, on retire les écouteurs de secours
+            window.removeEventListener('click', attemptPlay);
+            window.removeEventListener('keydown', attemptPlay);
+            window.removeEventListener('touchstart', attemptPlay);
+        }).catch(e => {
+            console.log("[Audio] Attente interaction utilisateur...");
+        });
+    };
+
+    attemptPlay();
+
+    // Au cas où, on s'attache aux événements d'interaction
+    window.addEventListener('click', attemptPlay);
+    window.addEventListener('keydown', attemptPlay);
+    window.addEventListener('touchstart', attemptPlay);
 }
