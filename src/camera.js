@@ -180,21 +180,41 @@ export function updateCamera(players) {
     if (!initialized) { currentTarget.copy(dest); initialized = true; }
     currentTarget.lerp(dest, TARGET_LERP);
 
-    // Auto-zoom + auto-PHI dynamiques (mode conduite uniquement)
+    // ── Caméra intelligente (mode conduite libre) ────────────────────────────
     if (_autoZoom) {
+        const n    = active.length;
         const span = Math.max(maxX - minX, maxZ - minZ);
 
-        // Rayon : couvre tout l'écartement + ~10 unités de marge de chaque côté
+        // ── Rayon : couvre l'écartement + marge ───────────────────────────
         const autoRadius   = THREE.MathUtils.clamp(span * 0.9 + 18, 18, 115);
         const targetRadius = THREE.MathUtils.clamp(autoRadius + _userZoom, RADIUS_MIN, RADIUS_MAX);
         RADIUS += (targetRadius - RADIUS) * 0.04;
 
-        // PHI : 60° si joueurs proches → 0° si joueurs éloignés (vue du dessus)
-        const PHI_CLOSE  = Math.PI / 3;   // 60°
-        const PHI_FAR    = 0.05;          // quasi top-down
-        const spanNorm   = THREE.MathUtils.clamp((span - 5) / 60, 0, 1);
-        const targetPHI  = THREE.MathUtils.lerp(PHI_CLOSE, PHI_FAR, spanNorm);
-        PHI += (targetPHI - PHI) * 0.03;
+        // ── Variance circulaire des joueurs autour du centroïde ───────────
+        // Chaque joueur contribue un vecteur unitaire dans sa direction depuis le centroïde.
+        // La magnitude du vecteur somme divisée par N donne R ∈ [0,1] :
+        //   R ≈ 0 → joueurs dispersés tout autour   → vue top-down
+        //   R ≈ 1 → joueurs regroupés d'un même côté → vue inclinée depuis l'opposé
+        let sumCos = 0, sumSin = 0;
+        for (const p of active) {
+            const angle = Math.atan2(p.car.position.z - cz, p.car.position.x - cx);
+            sumCos += Math.cos(angle);
+            sumSin += Math.sin(angle);
+        }
+        const R         = Math.sqrt(sumCos * sumCos + sumSin * sumSin) / n;
+        const meanAngle = Math.atan2(sumSin, sumCos); // direction moyenne du groupe
+
+        // ── PHI : top-down si dispersés, 60° si regroupés ─────────────────
+        const targetPHI = THREE.MathUtils.lerp(0.05, Math.PI / 3, R);
+        PHI += (targetPHI - PHI) * 0.025;
+
+        // ── THETA : caméra à l'opposé du groupe ───────────────────────────
+        // Plus R est grand, plus on oriente fermement la caméra en face du groupe.
+        const targetTHETA = meanAngle + Math.PI;
+        let dTheta = targetTHETA - THETA;
+        while (dTheta >  Math.PI) dTheta -= 2 * Math.PI;
+        while (dTheta < -Math.PI) dTheta += 2 * Math.PI;
+        THETA += dTheta * 0.018 * THREE.MathUtils.clamp(R * 2, 0.15, 1.0);
     }
 
     _applyCamera(currentTarget);
