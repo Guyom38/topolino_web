@@ -120,27 +120,59 @@ function _buildTexture() {
         return _h(ix,iy)+(_h(ix+1,iy)-_h(ix,iy))*ux+(_h(ix,iy+1)-_h(ix,iy))*uy+(_h(ix,iy)-_h(ix+1,iy)-_h(ix,iy+1)+_h(ix+1,iy+1))*ux*uy;
     };
 
-    // ── 1. Herbe fBm — bruit multi-octave + stries de tonte ─────────────────
-    const img = ctx.createImageData(S, S);
-    const d = img.data;
-    for (let y = 0; y < S; y++) {
-        for (let x = 0; x < S; x++) {
-            const nx = x * 0.013, ny = y * 0.013;
-            const v  =  _n(nx,      ny)      * 0.44
-                      + _n(nx*2.5,  ny*2.5)  * 0.27
-                      + _n(nx*6,    ny*6)    * 0.16
-                      + _n(nx*14,   ny*14)   * 0.08
-                      + _n(nx*35,   ny*35)   * 0.05;
-            const mow = Math.sin((x * 0.9 + y * 0.35) * 0.22) * 0.055;
-            const t   = Math.max(0, Math.min(1, 0.42 + v + mow));
-            const i4  = (y * S + x) * 4;
-            d[i4]   = (20 + t * 32)  | 0;
-            d[i4+1] = (78 + t * 80)  | 0;
-            d[i4+2] = (10 + t * 20)  | 0;
-            d[i4+3] = 255;
+    // ── 1. Herbe — tile 512² répété (16× moins de pixels) + brins groupés ───
+    const TILE = 512;
+    const tileCv  = document.createElement('canvas');
+    tileCv.width  = tileCv.height = TILE;
+    const tCtx    = tileCv.getContext('2d');
+    const tImg    = tCtx.createImageData(TILE, TILE);
+    const td      = tImg.data;
+    for (let ty = 0; ty < TILE; ty++) {
+        for (let tx = 0; tx < TILE; tx++) {
+            const nx = tx * 0.030, ny = ty * 0.030;
+            const v  =  _n(nx,      ny)     * 0.42
+                      + _n(nx*2.6,  ny*2.6) * 0.27
+                      + _n(nx*6.5,  ny*6.5) * 0.17
+                      + _n(nx*15,   ny*15)  * 0.09
+                      + _n(nx*36,   ny*36)  * 0.05;
+            const mow = Math.sin((tx * 0.9 + ty * 0.35) * 0.20) * 0.06;
+            const t   = Math.max(0, Math.min(1, 0.40 + v + mow));
+            const i4  = (ty * TILE + tx) * 4;
+            td[i4]   = (16 + t * 42) | 0;
+            td[i4+1] = (68 + t * 95) | 0;
+            td[i4+2] = (8  + t * 24) | 0;
+            td[i4+3] = 255;
         }
     }
-    ctx.putImageData(img, 0, 0);
+    tCtx.putImageData(tImg, 0, 0);
+
+    // Brins d'herbe batchés sur la tile (1 beginPath par teinte)
+    tCtx.lineCap = 'round';
+    const _bladeGroups = [
+        { color: 'rgba(55,135,15,0.80)', lw: 1.1, count: 1400, s0:  0 },
+        { color: 'rgba(35,105, 8,0.70)', lw: 0.9, count:  900, s0: 2000 },
+        { color: 'rgba(85,160,25,0.55)', lw: 0.8, count:  700, s0: 4000 },
+        { color: 'rgba(115,185,45,0.40)', lw: 0.7, count: 450, s0: 6000 },
+    ];
+    for (const { color, lw, count, s0 } of _bladeGroups) {
+        tCtx.strokeStyle = color;
+        tCtx.lineWidth   = lw;
+        tCtx.beginPath();
+        for (let i = 0; i < count; i++) {
+            const bx  = _h(s0 + i, 0) * TILE;
+            const by  = _h(s0 + i, 1) * TILE;
+            const len = 3 + _h(s0 + i, 2) * 7;
+            const ang = -Math.PI / 2 + (_h(s0 + i, 3) - 0.5) * 1.4;
+            tCtx.moveTo(bx, by);
+            tCtx.lineTo(bx + Math.cos(ang) * len, by + Math.sin(ang) * len);
+        }
+        tCtx.stroke();
+    }
+
+    // Répéter la tile sur tout le canvas principal
+    const pat = ctx.createPattern(tileCv, 'repeat');
+    ctx.fillStyle = pat;
+    ctx.fillRect(0, 0, S, S);
 
     const wx = x => (x + WORLD_HALF) * sc;
     const wz = z => (z + WORLD_HALF) * sc;
@@ -262,23 +294,6 @@ function _buildTexture() {
     ctx.lineWidth   = 2;
     ctx.beginPath(); ctx.moveTo(-hw, sqH / 2 + 3); ctx.lineTo(hw, sqH / 2 + 3); ctx.stroke();
     ctx.restore();
-
-    // ── 9. Cases de grille de départ (rectangles blancs sur la route) ────────
-    for (let i = 0; i < 8; i++) {
-        const tOff = 0.014 + i * 0.022;
-        const gp   = trackCurve.getPoint(tOff);
-        const gt   = trackCurve.getTangent(tOff);
-        const gAng = Math.atan2(gt.x, gt.z);
-        const side = i % 2 === 0 ? 1 : -1;
-        ctx.save();
-        ctx.translate(wx(gp.x), wz(gp.z));
-        ctx.rotate(gAng);
-        const bw = (ROAD_W / 2 - 1.5) * sc, bh = 5 * sc;
-        ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-        ctx.lineWidth   = 1;
-        ctx.strokeRect(side > 0 ? 1 : -bw - 1, -bh / 2, bw, bh);
-        ctx.restore();
-    }
 
     return new THREE.CanvasTexture(cv);
 }
