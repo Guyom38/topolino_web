@@ -104,100 +104,183 @@ function _getDistFromTrack(x, z) {
 // ── Canvas texture du circuit ─────────────────────────────────────────────────
 function _buildTexture() {
     const S   = 2048;
-    const WLD = WORLD_HALF * 2;   // 290 unités monde → S px canvas
+    const WLD = WORLD_HALF * 2;
     const sc  = S / WLD;
 
     const cv  = document.createElement('canvas');
     cv.width = cv.height = S;
     const ctx = cv.getContext('2d');
 
-    // Fonctions de conversion monde → canvas
-    const wx = x  => (x + WORLD_HALF) * sc;
-    const wz = z  => (z + WORLD_HALF) * sc;
+    // ── Bruit déterministe (pas de Math.random → texture stable) ─────────────
+    const _h = (ix, iy) => { const s = Math.sin(ix * 127.1 + iy * 311.7) * 43758.5453; return s - Math.floor(s); };
+    const _n = (x, y)   => {
+        const ix = Math.floor(x), iy = Math.floor(y);
+        const fx = x-ix, fy = y-iy;
+        const ux = fx*fx*(3-2*fx), uy = fy*fy*(3-2*fy);
+        return _h(ix,iy)+(_h(ix+1,iy)-_h(ix,iy))*ux+(_h(ix,iy+1)-_h(ix,iy))*uy+(_h(ix,iy)-_h(ix+1,iy)-_h(ix,iy+1)+_h(ix+1,iy+1))*ux*uy;
+    };
 
-    // 1. Fond herbe (avec variation légère)
-    ctx.fillStyle = '#2f6a2f';
-    ctx.fillRect(0, 0, S, S);
-    for (let i = 0; i < 4000; i++) {
-        const gx = Math.random() * S, gy = Math.random() * S;
-        ctx.fillStyle = `rgba(${10 + (Math.random()*20)|0},${90 + (Math.random()*30)|0},${10 + (Math.random()*20)|0},0.25)`;
-        ctx.fillRect(gx, gy, 3, 3);
+    // ── 1. Herbe fBm — bruit multi-octave + stries de tonte ─────────────────
+    const img = ctx.createImageData(S, S);
+    const d = img.data;
+    for (let y = 0; y < S; y++) {
+        for (let x = 0; x < S; x++) {
+            const nx = x * 0.013, ny = y * 0.013;
+            const v  =  _n(nx,      ny)      * 0.44
+                      + _n(nx*2.5,  ny*2.5)  * 0.27
+                      + _n(nx*6,    ny*6)    * 0.16
+                      + _n(nx*14,   ny*14)   * 0.08
+                      + _n(nx*35,   ny*35)   * 0.05;
+            const mow = Math.sin((x * 0.9 + y * 0.35) * 0.22) * 0.055;
+            const t   = Math.max(0, Math.min(1, 0.42 + v + mow));
+            const i4  = (y * S + x) * 4;
+            d[i4]   = (20 + t * 32)  | 0;
+            d[i4+1] = (78 + t * 80)  | 0;
+            d[i4+2] = (10 + t * 20)  | 0;
+            d[i4+3] = 255;
+        }
     }
+    ctx.putImageData(img, 0, 0);
 
-    const dPts = trackCurve.getPoints(800);
+    const wx = x => (x + WORLD_HALF) * sc;
+    const wz = z => (z + WORLD_HALF) * sc;
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
 
-    // 2. Bordure blanche (route + kerbs)
-    ctx.lineJoin  = 'round'; ctx.lineCap = 'round';
-    ctx.lineWidth = (ROAD_W + KERB_W * 2) * sc;
-    ctx.strokeStyle = '#e8e8e8';
-    ctx.beginPath();
-    dPts.forEach((p, i) => i === 0 ? ctx.moveTo(wx(p.x), wz(p.z)) : ctx.lineTo(wx(p.x), wz(p.z)));
-    ctx.closePath();
-    ctx.stroke();
+    const dPts = trackCurve.getPoints(1000);
+    const N    = dPts.length;
 
-    // 3. Asphalt
-    ctx.lineWidth   = ROAD_W * sc;
-    ctx.strokeStyle = '#282830';
-    ctx.beginPath();
-    dPts.forEach((p, i) => i === 0 ? ctx.moveTo(wx(p.x), wz(p.z)) : ctx.lineTo(wx(p.x), wz(p.z)));
-    ctx.closePath();
-    ctx.stroke();
+    // Chemin centré réutilisable
+    const centerPath = () => {
+        ctx.beginPath();
+        dPts.forEach((p, i) => i === 0 ? ctx.moveTo(wx(p.x), wz(p.z)) : ctx.lineTo(wx(p.x), wz(p.z)));
+        ctx.closePath();
+    };
 
-    // 4. Kerbs alternés rouge/blanc (segment par segment)
-    const kerbPx   = KERB_W * sc;
-    const halfRoad = (ROAD_W / 2) * sc;
-    const kerbCtr  = halfRoad + kerbPx / 2;   // distance centre → centre du kerb
+    // Normales au centre (pour les offsets)
+    const normals = dPts.map((p, i) => {
+        const prev = dPts[(i - 1 + N) % N], next = dPts[(i + 1) % N];
+        const dx = next.x - prev.x, dz = next.z - prev.z;
+        const len = Math.sqrt(dx*dx + dz*dz) || 0.001;
+        return { nx: -dz / len, nz: dx / len };
+    });
 
+    // Chemin offset (±dist unités monde)
+    const offsetPath = (dist) => {
+        ctx.beginPath();
+        dPts.forEach((p, i) => {
+            const { nx, nz } = normals[i];
+            const x = wx(p.x + nx * dist), z = wz(p.z + nz * dist);
+            i === 0 ? ctx.moveTo(x, z) : ctx.lineTo(x, z);
+        });
+        ctx.closePath();
+    };
+
+    // ── 2. Zone run-off (herbe courte, vert légèrement différent) ────────────
+    ctx.lineWidth   = (ROAD_W + KERB_W * 2 + 9) * sc;
+    ctx.strokeStyle = '#3d7d38';
+    centerPath(); ctx.stroke();
+
+    // ── 3. Kerbs rouge/blanc (alternés toutes les 2 sections) ────────────────
     for (let side = -1; side <= 1; side += 2) {
-        for (let i = 0; i < dPts.length - 1; i++) {
+        for (let i = 0; i < N - 1; i++) {
             const p0 = dPts[i], p1 = dPts[i + 1];
             const dx = p1.x - p0.x, dz = p1.z - p0.z;
-            const len = Math.sqrt(dx * dx + dz * dz) || 0.001;
-            // Normale perpendiculaire (→ extérieur)
-            const nx = (-dz / len) * side, nz = (dx / len) * side;
-            const ox = nx * (ROAD_W / 2 + KERB_W / 2);
-            const oz = nz * (ROAD_W / 2 + KERB_W / 2);
-
+            const len = Math.sqrt(dx*dx + dz*dz) || 0.001;
+            const nx = (-dz/len)*side, nz = (dx/len)*side;
+            const ox = nx*(ROAD_W/2 + KERB_W/2), oz = nz*(ROAD_W/2 + KERB_W/2);
             ctx.beginPath();
-            ctx.moveTo(wx(p0.x + ox), wz(p0.z + oz));
-            ctx.lineTo(wx(p1.x + ox), wz(p1.z + oz));
-            ctx.strokeStyle = Math.floor(i / 4) % 2 === 0 ? '#cc0000' : '#ffffff';
-            ctx.lineWidth   = kerbPx;
+            ctx.moveTo(wx(p0.x+ox), wz(p0.z+oz));
+            ctx.lineTo(wx(p1.x+ox), wz(p1.z+oz));
+            ctx.strokeStyle = Math.floor(i / 2) % 2 === 0 ? '#cc1111' : '#f0f0f0';
+            ctx.lineWidth   = KERB_W * sc;
             ctx.stroke();
         }
     }
 
-    // 5. Ligne médiane (tirets blancs)
-    ctx.setLineDash([10, 16]);
-    ctx.lineWidth   = 2;
-    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
-    ctx.beginPath();
-    dPts.forEach((p, i) => i === 0 ? ctx.moveTo(wx(p.x), wz(p.z)) : ctx.lineTo(wx(p.x), wz(p.z)));
-    ctx.closePath();
-    ctx.stroke();
+    // ── 4. Bordure blanche de route (crée les lignes de bord) ───────────────
+    ctx.lineWidth   = (ROAD_W + 3.0) * sc;
+    ctx.strokeStyle = '#dcdcdc';
+    centerPath(); ctx.stroke();
+
+    // ── 5. Asphalt sombre ────────────────────────────────────────────────────
+    ctx.lineWidth   = ROAD_W * sc;
+    ctx.strokeStyle = '#252528';
+    centerPath(); ctx.stroke();
+
+    // Grain asphalte (tirets aléatoires déterministes semi-transparents)
+    ctx.globalAlpha = 0.055;
+    ctx.strokeStyle = '#aaaaaa';
+    ctx.lineWidth   = 1.2;
+    for (let i = 0; i < N - 1; i += 2) {
+        const p  = dPts[i];
+        const { nx, nz } = normals[i];
+        const perpX = nz, perpZ = -nx; // tangente
+        const hR = ROAD_W / 2 * 0.82;
+        const ox  = ((_h(i, 0) - 0.5) * 2) * hR;
+        const oz  = ((_h(i, 1) - 0.5) * 2) * hR;
+        const len2 = 1.5 + _h(i, 2) * 2.5;
+        ctx.beginPath();
+        ctx.moveTo(wx(p.x + nx*ox + perpX*0.2), wz(p.z + nz*ox + perpZ*0.2));
+        ctx.lineTo(wx(p.x + nx*ox + perpX*(0.2+len2)), wz(p.z + nz*ox + perpZ*(0.2+len2)));
+        ctx.stroke();
+    }
+    ctx.globalAlpha = 1.0;
+
+    // ── 6. Double ligne de bord blanche (à l'intérieur de la route) ──────────
+    for (const side of [-1, 1]) {
+        ctx.lineWidth   = 1.4 * sc;
+        ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+        ctx.setLineDash([]);
+        offsetPath(side * (ROAD_W / 2 - 2));
+        ctx.stroke();
+    }
+
+    // ── 7. Ligne centrale jaune pointillée ───────────────────────────────────
+    ctx.setLineDash([12 * sc, 10 * sc]);
+    ctx.lineWidth   = 1.5 * sc;
+    ctx.strokeStyle = '#f5c800';
+    centerPath(); ctx.stroke();
     ctx.setLineDash([]);
 
-    // 6. Ligne de départ (damier noir/blanc)
+    // ── 8. Ligne de départ — grand damier noir/blanc ──────────────────────────
     const sp  = trackCurve.getPoint(0);
     const st  = trackCurve.getTangent(0);
-    const sn  = new THREE.Vector3(-st.z, 0, st.x).normalize();
-    const hw  = (ROAD_W / 2) * sc;
     const ang = Math.atan2(st.x, st.z);
-
+    const hw  = (ROAD_W / 2) * sc;
     ctx.save();
     ctx.translate(wx(sp.x), wz(sp.z));
     ctx.rotate(ang);
-    const sqW = hw / 3, sqH = 6;
-    for (let col = -3; col < 3; col++) {
-        for (let row = 0; row < 2; row++) {
-            ctx.fillStyle = (col + row) % 2 === 0 ? '#fff' : '#000';
-            ctx.fillRect(col * sqW, -sqH / 2 + row * sqH / 2, sqW, sqH / 2);
+    const cols = 8, rows = 3, sqW = hw * 2 / cols, sqH = 9;
+    for (let c = 0; c < cols; c++) {
+        for (let r = 0; r < rows; r++) {
+            ctx.fillStyle = (c + r) % 2 === 0 ? '#ffffff' : '#111111';
+            ctx.fillRect(-hw + c * sqW, -sqH / 2 + r * (sqH / rows), sqW, sqH / rows);
         }
     }
+    // Trait blanc fin avant la ligne
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth   = 2;
+    ctx.beginPath(); ctx.moveTo(-hw, sqH / 2 + 3); ctx.lineTo(hw, sqH / 2 + 3); ctx.stroke();
     ctx.restore();
 
-    const tex = new THREE.CanvasTexture(cv);
-    return tex;
+    // ── 9. Cases de grille de départ (rectangles blancs sur la route) ────────
+    for (let i = 0; i < 8; i++) {
+        const tOff = 0.014 + i * 0.022;
+        const gp   = trackCurve.getPoint(tOff);
+        const gt   = trackCurve.getTangent(tOff);
+        const gAng = Math.atan2(gt.x, gt.z);
+        const side = i % 2 === 0 ? 1 : -1;
+        ctx.save();
+        ctx.translate(wx(gp.x), wz(gp.z));
+        ctx.rotate(gAng);
+        const bw = (ROAD_W / 2 - 1.5) * sc, bh = 5 * sc;
+        ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+        ctx.lineWidth   = 1;
+        ctx.strokeRect(side > 0 ? 1 : -bw - 1, -bh / 2, bw, bh);
+        ctx.restore();
+    }
+
+    return new THREE.CanvasTexture(cv);
 }
 
 function _createFloor() {
