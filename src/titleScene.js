@@ -65,6 +65,12 @@ let _fbxTemplate = null;  // référence au template FBX pour les mini-voitures
 let _qrMesh      = null;
 let _smokeTex    = null;
 
+// ── Cycle jour/nuit ──────────────────────────────────────────────────────────
+let _sun       = null;
+let _fill      = null;
+let _ambient   = null;
+const DAY_CYCLE_DURATION = 60;  // durée d'un cycle complet en secondes
+
 // ── Contrôle joueurs sur la page de titre ────────────────────────────────────
 const _titlePlayerCars = new Map(); // id → { c, sprite, keys }
 const _TITLE_MOVE_KEYS = new Set(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','KeyA','KeyD','KeyW','KeyS']);
@@ -408,6 +414,7 @@ function _buildCar(fbxTemplate, color, isPolice = false) {
 
     const brakeMeshes   = []; // feux stop rouges
     const reverseMeshes = []; // feux de recul blancs
+    let headlightMesh   = null; // feux_avant_vitres
 
     clone.traverse(child => {
         if (!child.isMesh) return;
@@ -436,9 +443,47 @@ function _buildCar(fbxTemplate, color, isPolice = false) {
             if (isBrake) brakeMeshes.push(child);
             else         reverseMeshes.push(child);
         }
+        // ── Phares avant ──
+        if (n === 'feux_avant_vitres') {
+            headlightMesh = child;
+            child.material = child.material.clone();
+            child.material.emissive = new THREE.Color(0xffffcc);
+            child.material.emissiveIntensity = 0;
+        }
     });
 
-    return { group: clone, brakeMeshes, reverseMeshes };
+    // ── Créer les deux halos de phares avant (gauche & droite) ──
+    const headlights = [];
+    if (headlightMesh) {
+        // Forcer le calcul des matrices sans être dans la scène
+        clone.updateMatrixWorld(true);
+        headlightMesh.geometry.computeBoundingBox();
+        const hBox = headlightMesh.geometry.boundingBox;
+        // Centre du mesh en espace local du clone
+        const hCenter = new THREE.Vector3();
+        hBox.getCenter(hCenter);
+        headlightMesh.localToWorld(hCenter);
+        clone.worldToLocal(hCenter);
+        // Demi-largeur du mesh pour séparer les deux phares
+        const hHalfW = new THREE.Vector3();
+        hBox.getSize(hHalfW);
+        headlightMesh.localToWorld(hHalfW.copy(hBox.max));
+        clone.worldToLocal(hHalfW);
+        const hHalfWL = new THREE.Vector3();
+        headlightMesh.localToWorld(hHalfWL.copy(hBox.min));
+        clone.worldToLocal(hHalfWL);
+        const offset = Math.max(Math.abs(hHalfW.x - hHalfWL.x) * 0.28, 0.25);
+
+        for (const side of [-1, 1]) {
+            const pl = new THREE.PointLight(0xffffdd, 0, 6, 1.8);
+            // Légèrement devant le mesh des vitres pour le halo
+            pl.position.set(hCenter.x + side * offset, hCenter.y + 0.05, hCenter.z - 0.15);
+            clone.add(pl);
+            headlights.push(pl);
+        }
+    }
+
+    return { group: clone, brakeMeshes, reverseMeshes, headlightMesh, headlights };
 }
 
 function _setBrakeLights(c, on) {
@@ -451,6 +496,15 @@ function _setReverseLights(c, on) {
     for (const m of c.reverseMeshes) {
         m.material.emissive.setHex(on ? 0xffffff : 0x111111);
         m.material.emissiveIntensity = on ? 6.0 : 0.05;
+    }
+}
+
+function _setHeadlights(c, intensity) {
+    if (c.headlightMesh) {
+        c.headlightMesh.material.emissiveIntensity = intensity * 4.0;
+    }
+    for (const pl of c.headlights) {
+        pl.intensity = intensity * 3.0;
     }
 }
 
@@ -842,25 +896,26 @@ export async function initTitleScene() {
     _camera.position.set(0, 12, 10);
     _camera.lookAt(0, 0, 0);
 
-    _scene.add(new THREE.AmbientLight(0x7799cc, 0.6));
+    _ambient = new THREE.AmbientLight(0x7799cc, 0.6);
+    _scene.add(_ambient);
 
-    // Soleil venant d'en bas (Z+, faible hauteur) → ombres vers le haut de l'écran
-    const sun = new THREE.DirectionalLight(0xfff0cc, 1.9);
-    sun.position.set(10, 28, 40);   // vient du bas de l'écran, légèrement à droite
-    sun.castShadow = true;
-    sun.shadow.mapSize.width  = 2048;
-    sun.shadow.mapSize.height = 2048;
-    sun.shadow.camera.near   = 1;
-    sun.shadow.camera.far    = 120;
-    sun.shadow.camera.left   = -80;
-    sun.shadow.camera.right  =  80;
-    sun.shadow.camera.top    =  40;
-    sun.shadow.camera.bottom = -40;
-    sun.shadow.bias = -0.001;
-    _scene.add(sun);
+    // Soleil — sera animé par le cycle jour/nuit
+    _sun = new THREE.DirectionalLight(0xfff0cc, 1.9);
+    _sun.position.set(10, 28, 40);
+    _sun.castShadow = true;
+    _sun.shadow.mapSize.width  = 2048;
+    _sun.shadow.mapSize.height = 2048;
+    _sun.shadow.camera.near   = 1;
+    _sun.shadow.camera.far    = 120;
+    _sun.shadow.camera.left   = -80;
+    _sun.shadow.camera.right  =  80;
+    _sun.shadow.camera.top    =  40;
+    _sun.shadow.camera.bottom = -40;
+    _sun.shadow.bias = -0.001;
+    _scene.add(_sun);
 
-    const fill = new THREE.DirectionalLight(0x334488, 0.35);
-    fill.position.set(-20, 8, -15); _scene.add(fill);
+    _fill = new THREE.DirectionalLight(0x334488, 0.35);
+    _fill.position.set(-20, 8, -15); _scene.add(_fill);
 
     _createGrass();
     _createRoads();
@@ -886,7 +941,7 @@ export async function initTitleScene() {
         const isPolice = (i % 7 === 0);
         const color    = isPolice ? policeColor : BODY_COLORS[i % BODY_COLORS.length];
         const root     = new THREE.Group();
-        const { group: carGroup, brakeMeshes, reverseMeshes } = _buildCar(fbxTemplate, color, isPolice);
+        const { group: carGroup, brakeMeshes, reverseMeshes, headlightMesh, headlights } = _buildCar(fbxTemplate, color, isPolice);
         root.add(carGroup);
         if (DEBUG_OBB) _addDebugOBB(root, color);
         _scene.add(root);
@@ -920,6 +975,7 @@ export async function initTitleScene() {
             _leavingReverse: false,                  // true pendant la marche arrière de sortie
             _wantsLeave: false,                      // en attente de sortir du parking
             brakeMeshes, reverseMeshes,              // feux stop / recul
+            headlightMesh, headlights,               // phares avant
             smoke: null,                             // SmokeSystem si garé > 30s
         };
         _cars.push(c);
@@ -988,6 +1044,64 @@ function _onResize() {
     if (!_camera) return;
     _camera.aspect = window.innerWidth / window.innerHeight;
     _camera.updateProjectionMatrix();
+}
+
+// ── Cycle jour/nuit ──────────────────────────────────────────────────────────
+const _dayColor  = new THREE.Color(0x87CEEB); // ciel jour
+const _duskColor = new THREE.Color(0x1a0a2e); // crépuscule violet
+const _nightColor = new THREE.Color(0x04091a); // nuit profonde
+const _sunDay    = new THREE.Color(0xfff0cc);  // lumière soleil jour
+const _sunDusk   = new THREE.Color(0xff6633);  // lumière crépuscule
+const _sunNight  = new THREE.Color(0x112244);  // lune nuit
+const _ambDay    = new THREE.Color(0x7799cc);
+const _ambNight  = new THREE.Color(0x0a0e1a);
+const _fillDay   = new THREE.Color(0x334488);
+const _fillNight = new THREE.Color(0x0a0a22);
+const _tmpC      = new THREE.Color();
+
+function _updateDayNight(now) {
+    if (!_sun) return;
+    // t va de 0 à 1 sur un cycle complet (60s par défaut)
+    const t = (now / 1000 % DAY_CYCLE_DURATION) / DAY_CYCLE_DURATION;
+
+    // Phase : 0→0.4 jour, 0.4→0.5 coucher, 0.5→0.9 nuit, 0.9→1.0 lever
+    // sunAngle : 0=lever(est), PI/2=zénith, PI=coucher(ouest)
+    const sunAngle = t * Math.PI * 2;
+    const sunHeight = Math.sin(sunAngle);    // -1..1, >0 = jour
+    const sunX     = Math.cos(sunAngle) * 50;
+    const sunY     = Math.max(2, sunHeight * 35 + 10); // ne descend pas trop bas
+    const sunZ     = 20; // toujours venant du sud (bas de l'écran)
+
+    _sun.position.set(sunX, sunY, sunZ);
+
+    // Facteur jour : 1=plein jour, 0=pleine nuit, transition douce
+    const dayFactor = THREE.MathUtils.smoothstep(sunHeight, -0.2, 0.3);
+
+    // Couleur ciel : jour → crépuscule → nuit
+    const duskFactor = Math.max(0, 1 - Math.abs(sunHeight) * 4); // pic au lever/coucher
+    _tmpC.copy(_nightColor).lerp(_dayColor, dayFactor);
+    if (duskFactor > 0) _tmpC.lerp(_duskColor, duskFactor * 0.5);
+    _scene.background.copy(_tmpC);
+
+    // Intensité et couleur soleil
+    _sun.intensity = THREE.MathUtils.lerp(0.08, 1.9, dayFactor);
+    _tmpC.copy(_sunNight).lerp(_sunDay, dayFactor);
+    if (duskFactor > 0) _tmpC.lerp(_sunDusk, duskFactor * 0.7);
+    _sun.color.copy(_tmpC);
+
+    // Ambiante
+    _ambient.intensity = THREE.MathUtils.lerp(0.08, 0.6, dayFactor);
+    _ambient.color.copy(_ambNight).lerp(_ambDay, dayFactor);
+
+    // Fill light
+    _fill.intensity = THREE.MathUtils.lerp(0.05, 0.35, dayFactor);
+    _fill.color.copy(_fillNight).lerp(_fillDay, dayFactor);
+
+    // Phares avant : s'allument quand il fait sombre (dayFactor < 0.5)
+    const headlightIntensity = THREE.MathUtils.smoothstep(1 - dayFactor, 0.5, 0.8);
+    for (const c of _cars) {
+        _setHeadlights(c, headlightIntensity);
+    }
 }
 
 function _loop() {
@@ -1430,6 +1544,9 @@ function _loop() {
         sprite.position.set(c.x, 3.2, c.z);
         _updateNameSprite(sprite, c.angle, c.x, c.z);
     }
+
+    // ── Cycle jour/nuit ─────────────────────────────────────────────────────
+    _updateDayNight(performance.now());
 
     // ── Détection des votes joueurs sur les vignettes de mode ──────────────
     _detectModeVotes();
