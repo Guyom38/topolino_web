@@ -52,7 +52,7 @@ const PARK_SPOTS = (function() {
     return spots;
 })();
 const PARK_DURATION_MIN = 10000; // 10s minimum
-const PARK_DURATION_MAX = 30000; // 30s maximum
+const PARK_DURATION_MAX = 40000; // 40s maximum
 const PARK_APPROACH = 15;    // distance pour repérer une place
 const PARK_SNAP     = 1.5;   // distance de snap pour se garer
 
@@ -496,7 +496,7 @@ function _createRoads() {
     const ROAD_W_TOP  = 12;
     const ROAD_W_BOT  = 8.4;   // 30% plus étroite
 
-    // Route du haut (au-dessus du titre)
+    // Route du haut (au-dessus du titre) — avec passage piéton
     const geo1 = new THREE.PlaneGeometry(ROAD_LEN, ROAD_W_TOP);
     const tex1 = new THREE.CanvasTexture(_createRoadTexture(0));
     const mat1 = new THREE.MeshStandardMaterial({ map: tex1, roughness: 0.92, metalness: 0.05 });
@@ -807,8 +807,10 @@ function _loop() {
                 } else {
                     // ── Circulation normale sur Y3 ───────────────────────────
                     c.targetZ = c.mainZ;
-                    // Chercher une place libre devant (probabilité)
-                    if (Math.random() < 0.003) {
+                    // Probabilité augmentée si moins de 2 voitures garées
+                    const parkedCount = _cars.filter(o => o.parkState === 'parked').length;
+                    const parkProb = parkedCount < 2 ? 0.015 : 0.003;
+                    if (Math.random() < parkProb) {
                         for (let si = 0; si < PARK_SPOTS.length; si++) {
                             const spot  = PARK_SPOTS[si];
                             const ahead = c.dir * (spot.x - c.x);
