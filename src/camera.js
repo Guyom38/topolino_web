@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { camera } from './scene.js';
 
 // ── Paramètres orbitaux ───────────────────────────────────────────────────────
-let PHI    = 0.80;           // angle vertical depuis le zénith (rad)
+let PHI    = Math.PI / 6;    // 30° depuis le zénith (rad)
 let THETA  = Math.PI * 0.80; // angle horizontal (rad)
 let RADIUS = 36;             // distance caméra–cible (auto-gérée en mode conduite)
 
@@ -185,8 +185,8 @@ export function updateCamera(players) {
         const n    = active.length;
         const span = Math.max(maxX - minX, maxZ - minZ);
 
-        // ── Rayon : couvre l'écartement + marge ───────────────────────────
-        const autoRadius   = THREE.MathUtils.clamp(span * 0.9 + 18, 18, 115);
+        // ── Rayon : couvre l'écartement + marge, zoom serré si joueurs proches ──
+        const autoRadius   = THREE.MathUtils.clamp(span * 0.75 + 12, 12, 115);
         const targetRadius = THREE.MathUtils.clamp(autoRadius + _userZoom, RADIUS_MIN, RADIUS_MAX);
         RADIUS += (targetRadius - RADIUS) * 0.04;
 
@@ -209,12 +209,13 @@ export function updateCamera(players) {
         PHI += (targetPHI - PHI) * 0.025;
 
         // ── THETA : caméra à l'opposé du groupe ───────────────────────────
-        // Plus R est grand, plus on oriente fermement la caméra en face du groupe.
+        // Deadzone : ne tourne que si la correction dépasse ~25°.
+        // En-dessous, les joueurs sont déjà bien cadrés → on reste stable.
         const targetTHETA = meanAngle + Math.PI;
         let dTheta = targetTHETA - THETA;
         while (dTheta >  Math.PI) dTheta -= 2 * Math.PI;
         while (dTheta < -Math.PI) dTheta += 2 * Math.PI;
-        THETA += dTheta * 0.018 * THREE.MathUtils.clamp(R * 2, 0.15, 1.0);
+        // Rotation THETA désactivée
     }
 
     _applyCamera(currentTarget);

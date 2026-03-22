@@ -1,22 +1,19 @@
-// ── Barrière circulaire — mode conduite libre ─────────────────────────────────
+// ── Barrière carrée — mode conduite libre ─────────────────────────────────────
 import * as THREE from 'three';
 import { scene } from './scene.js';
 
-export const BARRIER_R = 80;    // rayon du mur (unités)
+export const BARRIER_HALF = 80;  // demi-côté du carré (unités)
 
-const WALL_H   = 3.0;           // hauteur du mur
-const BOUNCE   = 0.30;          // coefficient de rebond (0 = mou, 1 = élastique)
-const SEGMENTS = 160;           // finesse du cylindre
+const WALL_H   = 3.5;            // hauteur du mur
+const WALL_L   = BARRIER_HALF * 2; // longueur d'un côté = 160
+const BOUNCE   = 0.30;
 
-let _hazardTex = null;          // texture de rayures (animée)
+let _hazardTex = null;
 
-// ── Création visuelle ─────────────────────────────────────────────────────────
-export function initBarrier() {
-
-    // Texture rayures chevrons rouge/noir (identique au trou du derby)
+// ── Texture rayures chevrons rouge/noir ───────────────────────────────────────
+function _makeHazardTex() {
     const cv  = document.createElement('canvas');
-    cv.width  = 512;
-    cv.height = 64;
+    cv.width  = 512; cv.height = 64;
     const ctx = cv.getContext('2d');
     ctx.fillStyle = '#0d0d0d';
     ctx.fillRect(0, 0, 512, 64);
@@ -24,34 +21,54 @@ export function initBarrier() {
     const sw = 40;
     for (let x = -80; x < 600; x += sw * 2) {
         ctx.beginPath();
-        ctx.moveTo(x,          0);
-        ctx.lineTo(x + sw,     0);
+        ctx.moveTo(x,           0);
+        ctx.lineTo(x + sw,      0);
         ctx.lineTo(x + sw - 64, 64);
-        ctx.lineTo(x - 64,    64);
+        ctx.lineTo(x - 64,      64);
         ctx.closePath();
         ctx.fill();
     }
-    _hazardTex = new THREE.CanvasTexture(cv);
-    _hazardTex.wrapS    = THREE.RepeatWrapping;
-    _hazardTex.wrapT    = THREE.ClampToEdgeWrapping;
-    _hazardTex.repeat.set(SEGMENTS / 8, 1);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.wrapS  = THREE.RepeatWrapping;
+    tex.wrapT  = THREE.ClampToEdgeWrapping;
+    tex.repeat.set(WALL_L / 8, 1);
+    return tex;
+}
 
-    // Mur cylindrique — face intérieure (BackSide)
-    const wallGeo = new THREE.CylinderGeometry(
-        BARRIER_R, BARRIER_R, WALL_H, SEGMENTS, 1, true
-    );
+// ── Création d'un pan de mur ──────────────────────────────────────────────────
+function _makeWall(wallMat, rimMat, baseMat, px, pz, rotY) {
+    // Corps du mur
+    const wallGeo = new THREE.PlaneGeometry(WALL_L, WALL_H);
+    const wall    = new THREE.Mesh(wallGeo, wallMat);
+    wall.position.set(px, WALL_H / 2, pz);
+    wall.rotation.y = rotY;
+    scene.add(wall);
+
+    // Barre lumineuse au sommet
+    const rimGeo = new THREE.BoxGeometry(WALL_L, 0.30, 0.30);
+    const rim    = new THREE.Mesh(rimGeo, rimMat);
+    rim.position.set(px, WALL_H + 0.15, pz);
+    rim.rotation.y = rotY;
+    scene.add(rim);
+
+    // Socle béton
+    const baseGeo = new THREE.BoxGeometry(WALL_L, 0.60, 0.60);
+    const base    = new THREE.Mesh(baseGeo, baseMat);
+    base.position.set(px, 0.30, pz);
+    base.rotation.y = rotY;
+    scene.add(base);
+}
+
+// ── Création visuelle ─────────────────────────────────────────────────────────
+export function initBarrier() {
+    _hazardTex = _makeHazardTex();
+
     const wallMat = new THREE.MeshStandardMaterial({
         map:       _hazardTex,
         roughness: 0.75,
         metalness: 0.05,
-        side:      THREE.DoubleSide,   // BackSide cause VALIDATE_STATUS false sur certains GPU
+        side:      THREE.DoubleSide,
     });
-    const wall = new THREE.Mesh(wallGeo, wallMat);
-    wall.position.y = WALL_H / 2;
-    scene.add(wall);
-
-    // Tore lumineux au sommet
-    const rimGeo = new THREE.TorusGeometry(BARRIER_R, 0.20, 8, SEGMENTS);
     const rimMat = new THREE.MeshStandardMaterial({
         color:             0xff4400,
         emissive:          0xff2200,
@@ -59,22 +76,29 @@ export function initBarrier() {
         roughness:         0.35,
         metalness:         0.25,
     });
-    const rim = new THREE.Mesh(rimGeo, rimMat);
-    rim.rotation.x = Math.PI / 2;
-    rim.position.y = WALL_H;
-    scene.add(rim);
-
-    // Socle béton (bas du mur)
-    const baseGeo = new THREE.TorusGeometry(BARRIER_R, 0.40, 8, SEGMENTS);
     const baseMat = new THREE.MeshStandardMaterial({
         color:     0x505050,
         roughness: 0.9,
         metalness: 0.05,
     });
-    const base = new THREE.Mesh(baseGeo, baseMat);
-    base.rotation.x = Math.PI / 2;
-    base.position.y = 0.40;
-    scene.add(base);
+
+    const H = BARRIER_HALF;
+    // 4 murs : +Z, -Z, +X, -X
+    _makeWall(wallMat, rimMat, baseMat,  0,  H, Math.PI);       // mur avant
+    _makeWall(wallMat, rimMat, baseMat,  0, -H, 0);             // mur arrière
+    _makeWall(wallMat, rimMat, baseMat,  H,  0, Math.PI / 2);   // mur droit
+    _makeWall(wallMat, rimMat, baseMat, -H,  0, -Math.PI / 2);  // mur gauche
+
+    // Poteaux de coin
+    const postGeo = new THREE.BoxGeometry(0.8, WALL_H + 0.5, 0.8);
+    const postMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 });
+    for (const sx of [-1, 1]) {
+        for (const sz of [-1, 1]) {
+            const post = new THREE.Mesh(postGeo, postMat);
+            post.position.set(sx * H, (WALL_H + 0.5) / 2, sz * H);
+            scene.add(post);
+        }
+    }
 }
 
 // ── Animation — appeler chaque frame ──────────────────────────────────────────
@@ -82,32 +106,42 @@ export function updateBarrier() {
     if (_hazardTex) _hazardTex.offset.x += 0.003;
 }
 
-// ── Collision — appeler après updatePhysics pour chaque joueur ────────────────
+// ── Collision AABB — appeler après updatePhysics pour chaque joueur ───────────
 export function applyBarrier(p) {
     if (!p.car) return;
+    const inner = BARRIER_HALF - 1.0;
 
-    const x    = p.car.position.x;
-    const z    = p.car.position.z;
-    const dist = Math.sqrt(x * x + z * z);
+    // Axe X
+    if (p.car.position.x > inner) {
+        p.car.position.x = inner;
+        if (p.velocity.x > 0) {
+            p.velocity.x  = -p.velocity.x * BOUNCE;
+            p.velocity.z *= (1 - BOUNCE * 0.3);
+            p.carSpeed     = Math.abs(p.carSpeed) * (1 - BOUNCE * 0.5);
+        }
+    } else if (p.car.position.x < -inner) {
+        p.car.position.x = -inner;
+        if (p.velocity.x < 0) {
+            p.velocity.x  = -p.velocity.x * BOUNCE;
+            p.velocity.z *= (1 - BOUNCE * 0.3);
+            p.carSpeed     = Math.abs(p.carSpeed) * (1 - BOUNCE * 0.5);
+        }
+    }
 
-    // Aucune interaction loin de la barrière
-    if (dist < BARRIER_R - 1.0) return;
-
-    // Normale vers l'intérieur (du mur vers le centre)
-    const nx = x / dist;   // direction radiale vers l'extérieur
-    const nz = z / dist;
-
-    // Reclamper la position à l'intérieur du mur
-    const inner = BARRIER_R - 1.0;
-    p.car.position.x = nx * inner;
-    p.car.position.z = nz * inner;
-
-    // Composante de vitesse sortante (vers le mur)
-    const vOut = p.velocity.x * nx + p.velocity.z * nz;
-    if (vOut > 0) {
-        // Réfléchir la composante radiale avec amortissement
-        p.velocity.x -= (1 + BOUNCE) * vOut * nx;
-        p.velocity.z -= (1 + BOUNCE) * vOut * nz;
-        p.carSpeed    = Math.abs(p.carSpeed) * (1 - BOUNCE * 0.5);
+    // Axe Z
+    if (p.car.position.z > inner) {
+        p.car.position.z = inner;
+        if (p.velocity.z > 0) {
+            p.velocity.z  = -p.velocity.z * BOUNCE;
+            p.velocity.x *= (1 - BOUNCE * 0.3);
+            p.carSpeed     = Math.abs(p.carSpeed) * (1 - BOUNCE * 0.5);
+        }
+    } else if (p.car.position.z < -inner) {
+        p.car.position.z = -inner;
+        if (p.velocity.z < 0) {
+            p.velocity.z  = -p.velocity.z * BOUNCE;
+            p.velocity.x *= (1 - BOUNCE * 0.3);
+            p.carSpeed     = Math.abs(p.carSpeed) * (1 - BOUNCE * 0.5);
+        }
     }
 }

@@ -19,7 +19,7 @@ function smoothNoise(x, z) {
     return a + (b - a) * ux + (c - a) * uz + (a - b - c + d) * ux * uz;
 }
 
-const H_AMPLITUDE = 18.0;  // amplitude de base ±9 unités
+const H_AMPLITUDE = 10.0;  // amplitude réduite → plaines plus plates entre les buttes
 const H_SCALE     = 1 / 90;
 const M_SCALE     = 1 / 280; // fréquence du masque montagne (zones isolées)
 const M_THRESHOLD = 0.62;    // seuil au-dessus duquel une montagne se forme
@@ -57,8 +57,11 @@ export function getHeightAt(x, z) {
     const t    = Math.max(0, (mask - M_THRESHOLD) / (1 - M_THRESHOLD));
     let   h    = base + t * t * base * 2.5;
 
-    // Buttes de saut (conduite libre uniquement — ni chase, ni foot)
-    if (!isChase && !isFoot) h += _jumpBumpAt(x, z);
+    // Buttes (conduite libre uniquement — ni chase, ni foot)
+    if (!isChase && !isFoot) {
+        h += _jumpBumpAt(x, z);
+        h += _megaBumpAt(x, z);
+    }
 
     // Fondu progressif vers 0 à l'approche de la barrière (conduite libre)
     // Permet à la caméra de voir le joueur sans que les collines masquent la vue
@@ -77,7 +80,7 @@ export function getHeightAt(x, z) {
 }
 
 // ── Buttes de saut procédurales (conduite libre uniquement) ───────────────────
-const BUMP_CELL = 70; // une butte possible par cellule de 70×70 unités
+const BUMP_CELL = 18; // une butte possible par cellule de 18×18 unités
 
 function _jumpBumpAt(x, z) {
     let result = 0;
@@ -89,21 +92,52 @@ function _jumpBumpAt(x, z) {
             const cx = cx0 + dcx;
             const cz = cz0 + dcz;
 
-            // ~28% des cellules ont une butte (hash > 0.72)
-            if (hash(cx * 3 + 1, cz * 3 + 2) < 0.72) continue;
+            // ~75% des cellules ont une butte (hash > 0.25)
+            if (hash(cx * 3 + 1, cz * 3 + 2) < 0.25) continue;
 
-            // Centre de la butte, décentré aléatoirement dans la cellule
-            const bx = (cx + hash(cx,      cz     ) * 0.65 + 0.17) * BUMP_CELL;
-            const bz = (cz + hash(cx + 17, cz +  5) * 0.65 + 0.17) * BUMP_CELL;
+            const bx = (cx + hash(cx,      cz     ) * 0.70 + 0.15) * BUMP_CELL;
+            const bz = (cz + hash(cx + 17, cz +  5) * 0.70 + 0.15) * BUMP_CELL;
 
             const dx = x - bx, dz_ = z - bz;
             const d  = Math.sqrt(dx * dx + dz_ * dz_);
-            const r  = 9  + hash(cx * 7, cz * 7) * 5;    // rayon 9–14
+            const r  = 6  + hash(cx * 7, cz * 7) * 7;    // rayon 6–13
             if (d >= r * 2.2) continue;
 
-            const bh = 5.0 + hash(cx * 5, cz * 9) * 3.5; // hauteur 5–8.5
+            const bh = 1.5 + hash(cx * 5, cz * 9) * 7.5; // hauteur 1.5–9
             const nt = Math.max(0, 1.0 - d / (r * 2.2));
-            result  += bh * nt * nt * (3.0 - 2.0 * nt);  // smoothstep
+            result  += bh * nt * nt * (3.0 - 2.0 * nt);
+        }
+    }
+    return result;
+}
+
+// ── Méga-buttes (quelques-unes, très hautes — jusqu'à 6× les buttes normales) ──
+const MEGA_CELL = 55; // une méga-butte possible par cellule de 55×55 unités
+
+function _megaBumpAt(x, z) {
+    let result = 0;
+    const cx0 = Math.floor(x / MEGA_CELL);
+    const cz0 = Math.floor(z / MEGA_CELL);
+
+    for (let dcx = -1; dcx <= 1; dcx++) {
+        for (let dcz = -1; dcz <= 1; dcz++) {
+            const cx = cx0 + dcx;
+            const cz = cz0 + dcz;
+
+            // ~15% des cellules ont une méga-butte
+            if (hash(cx * 11 + 3, cz * 7 + 5) < 0.85) continue;
+
+            const bx = (cx + hash(cx,      cz     ) * 0.70 + 0.15) * MEGA_CELL;
+            const bz = (cz + hash(cx + 31, cz + 13) * 0.70 + 0.15) * MEGA_CELL;
+
+            const dx = x - bx, dz_ = z - bz;
+            const d  = Math.sqrt(dx * dx + dz_ * dz_);
+            const r  = 8 + hash(cx * 13, cz * 9) * 10;     // rayon 8–18
+            if (d >= r * 2.2) continue;
+
+            const bh = 24 + hash(cx * 7, cz * 3) * 24;     // hauteur 24–48 (≈ 3×–6× max normal)
+            const nt = Math.max(0, 1.0 - d / (r * 2.2));
+            result  += bh * nt * nt * (3.0 - 2.0 * nt);
         }
     }
     return result;
