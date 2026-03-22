@@ -301,7 +301,7 @@
             mask-image: linear-gradient(to right, transparent 0%, #000 8%, #000 85%, transparent 100%);
         }
         #modes-track {
-            display: flex; gap: 13px;
+            display: flex; gap: 18px;
             transition: transform 0.42s cubic-bezier(0.25,0.46,0.45,0.94);
             padding: 18px 10px 22px;
         }
@@ -382,6 +382,53 @@
         .mode-vig .v-name { font-family: 'Bebas Neue', Impact, 'Arial Black', sans-serif; font-size: 20px; letter-spacing: .07em; color: #fff; }
         .mode-vig .v-desc { font-size: 9.5px; color: rgba(255,255,255,.38); margin-top: 7px; line-height: 1.5; flex: 1; }
         .mode-vig .v-badge { position: absolute; top: 9px; right: 9px; background: #ff6b1c; color: #fff; font-size: 7px; font-weight: 900; padding: 2px 7px; border-radius: 20px; letter-spacing: .1em; text-transform: uppercase; }
+        /* Séparateur GTA entre random et les modes */
+        .modes-sep {
+            flex: 0 0 16px; align-self: stretch; margin: 12px 6px;
+            position: relative; display: flex; align-items: center; justify-content: center;
+            background: transparent;
+        }
+        .modes-sep::before {
+            content: '';
+            position: absolute; top: 8%; bottom: 8%; left: 50%;
+            width: 3px; transform: translateX(-50%) skewX(-8deg);
+            background: linear-gradient(to bottom,
+                transparent 0%,
+                rgba(255,170,0,0.15) 10%,
+                rgba(255,200,0,0.6) 25%,
+                #ffaa00 45%, #ff6b1c 55%,
+                rgba(255,200,0,0.6) 75%,
+                rgba(255,170,0,0.15) 90%,
+                transparent 100%);
+            box-shadow: 0 0 8px rgba(255,150,0,0.3), 0 0 20px rgba(255,120,0,0.1);
+        }
+        .modes-sep::after {
+            content: '◆';
+            position: relative; z-index: 1;
+            font-size: 10px; color: #ffaa00;
+            text-shadow: 0 0 8px rgba(255,150,0,0.6), 0 0 20px rgba(255,100,0,0.2);
+            background: rgba(4,8,20,0.9);
+            padding: 4px 2px;
+        }
+        /* Surbrillance loterie */
+        .mode-vig.lottery-highlight {
+            border-color: rgba(255,200,0,.7) !important;
+            background: rgba(255,200,0,.12) !important;
+            box-shadow: 0 0 30px rgba(255,170,0,.35), 0 0 0 2px rgba(255,200,0,.4) !important;
+            transform: translateY(-5px) scale(1.05) !important;
+        }
+        .mode-vig.lottery-pick {
+            animation: lotteryPick 0.6s ease-out;
+            border-color: rgba(255,200,0,.9) !important;
+            background: rgba(255,200,0,.18) !important;
+            box-shadow: 0 0 50px rgba(255,170,0,.5), 0 0 0 2px rgba(255,200,0,.6) !important;
+            transform: translateY(-8px) scale(1.08) !important;
+        }
+        @keyframes lotteryPick {
+            0%   { transform: translateY(0) scale(1); }
+            40%  { transform: translateY(-12px) scale(1.12); }
+            100% { transform: translateY(-8px) scale(1.08); }
+        }
 
         /* ═══ WAITING OVERLAY ═══ */
         #waiting-screen {
@@ -508,6 +555,25 @@
 // ════════════════════════════════════════════════════════════════
 const MODE = new URLSearchParams(location.search).get('mode');
 
+/* ── Plein écran au premier geste utilisateur ──────────────────── */
+function _goFullscreen() {
+    const el = document.documentElement;
+    const rfs = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+    if (rfs && !document.fullscreenElement && !document.webkitFullscreenElement) {
+        rfs.call(el).catch(() => {});
+    }
+}
+// Déclencher au premier clic ou touche (nécessaire geste utilisateur)
+function _onFirstInteraction() {
+    _goFullscreen();
+    document.removeEventListener('click', _onFirstInteraction, true);
+    document.removeEventListener('keydown', _onFirstInteraction, true);
+    document.removeEventListener('touchstart', _onFirstInteraction, true);
+}
+document.addEventListener('click', _onFirstInteraction, { capture: true, once: false });
+document.addEventListener('keydown', _onFirstInteraction, { capture: true, once: false });
+document.addEventListener('touchstart', _onFirstInteraction, { capture: true, once: false });
+
 // Démarrage direct via URL (?mode=xxx) — F5 ou lien direct
 if (MODE) {
     document.getElementById('title-screen').classList.add('hidden');
@@ -558,35 +624,53 @@ const _MODES = [
 ];
 let _modesOff = 0;
 
+const _STEP = 176; // 158px card + 18px gap
 function _modesVis() {
     const vp = document.getElementById('modes-viewport');
-    return vp ? Math.max(1, Math.floor(vp.offsetWidth / 171)) : 5;
+    return vp ? Math.max(1, Math.floor(vp.offsetWidth / _STEP)) : 5;
 }
 function _modesRefresh() {
-    const maxOff = _MODES.length - _modesVis();
-    document.getElementById('modes-track').style.transform = `translateX(-${_modesOff * 171}px)`;
+    // +1 pour la carte random + séparateur (compte comme 1 slot en plus)
+    const totalSlots = _MODES.length + 1;
+    const maxOff = totalSlots - _modesVis();
+    document.getElementById('modes-track').style.transform = `translateX(-${_modesOff * _STEP}px)`;
     const atStart = _modesOff <= 0;
     const atEnd   = _modesOff >= maxOff;
     const prev = document.getElementById('modes-prev');
     const next = document.getElementById('modes-next');
     prev.classList.toggle('hidden-arrow', atStart);
     next.classList.toggle('hidden-arrow', atEnd);
-    // Fondu gauche uniquement quand on a scrollé
     document.getElementById('modes-viewport').classList.toggle('scrolled', !atStart);
 }
 function _modesPrev() { if (_modesOff > 0) { _modesOff--; _modesRefresh(); } }
-function _modesNext() { if (_modesOff < _MODES.length - _modesVis()) { _modesOff++; _modesRefresh(); } }
+function _modesNext() {
+    const totalSlots = _MODES.length + 1;
+    if (_modesOff < totalSlots - _modesVis()) { _modesOff++; _modesRefresh(); }
+}
+
+let _lotteryRunning = false;
 
 function _showModesOverlay() {
     document.querySelector('.title-content').classList.add('slide-out');
     const track = document.getElementById('modes-track');
-    track.innerHTML = _MODES.map(m => `
-        <div class="mode-vig" onclick="go('${m.mode}')" onmouseenter="_playTick()">
+
+    // Carte random + séparateur + modes normaux
+    const randomCard = `
+        <div class="mode-vig" id="random-vig" onclick="_startLottery()" onmouseenter="_playTick()">
+            <div class="v-img-wrap"><img class="v-img" src="Asssets/modes/random.png" alt="Hasard"></div>
+            <div class="v-name">Hasard</div>
+            <div class="v-desc">Lance la roue du destin !</div>
+        </div>`;
+    const sep = '<div class="modes-sep"></div>';
+    const modeCards = _MODES.map((m, i) => `
+        <div class="mode-vig" data-lottery="${i}" onclick="go('${m.mode}')" onmouseenter="_playTick()">
             ${m.badge ? `<span class="v-badge">${m.badge}</span>` : ''}
             <div class="v-img-wrap"><img class="v-img" src="${m.img}" alt="${m.name}" onerror="this.src='Asssets/modes/new.png'"></div>
             <div class="v-name">${m.name}</div>
             <div class="v-desc">${m.desc}</div>
         </div>`).join('');
+
+    track.innerHTML = randomCard + sep + modeCards;
     const ov = document.getElementById('modes-overlay');
     requestAnimationFrame(() => requestAnimationFrame(() => {
         ov.classList.add('visible');
@@ -596,6 +680,71 @@ function _showModesOverlay() {
         // Cacher le QR 3D sur le terre-plein
         import('./src/titleScene.js').then(m => m.hideQRSign && m.hideQRSign()).catch(() => {});
     }));
+}
+
+/* ── Loterie de mode ──────────────────────────────────────────── */
+function _startLottery() {
+    if (_lotteryRunning) return;
+    _lotteryRunning = true;
+    _playClick();
+
+    const cards = document.querySelectorAll('.mode-vig[data-lottery]');
+    const n = cards.length;
+    if (!n) { _lotteryRunning = false; return; }
+
+    // Scroller pour montrer les modes
+    _modesOff = 1;
+    _modesRefresh();
+
+    const finalIdx = Math.floor(Math.random() * n);
+    // Pré-calculer toutes les étapes : tours complets + atterrissage sur finalIdx
+    const totalTurns = 3; // 3 tours complets avant de ralentir
+    const totalSteps = totalTurns * n + finalIdx;
+    let stepIdx = 0;
+
+    function _scrollToCard(idx) {
+        const vis = _modesVis();
+        const slotIdx = idx + 1;
+        if (slotIdx >= _modesOff + vis - 1) {
+            _modesOff = Math.min(slotIdx - vis + 2, _MODES.length + 1 - vis);
+            _modesRefresh();
+        } else if (slotIdx < _modesOff) {
+            _modesOff = Math.max(0, slotIdx);
+            _modesRefresh();
+        }
+    }
+
+    function step() {
+        cards.forEach(c => c.classList.remove('lottery-highlight', 'lottery-pick'));
+
+        const current = stepIdx % n;
+        cards[current].classList.add('lottery-highlight');
+        _playTick();
+        _scrollToCard(current);
+
+        stepIdx++;
+
+        if (stepIdx > totalSteps) {
+            // Terminé — surbrillance finale sur la bonne carte
+            cards.forEach(c => c.classList.remove('lottery-highlight'));
+            cards[finalIdx].classList.add('lottery-pick');
+            _playClick();
+            // Centrer la carte choisie
+            const vis = _modesVis();
+            const targetOff = Math.max(0, Math.min(finalIdx + 1 - Math.floor(vis / 2), _MODES.length + 1 - vis));
+            _modesOff = targetOff;
+            _modesRefresh();
+            _lotteryRunning = false;
+            return;
+        }
+
+        // Intervalle : rapide au début, ralentit progressivement vers la fin
+        const progress = stepIdx / totalSteps;
+        const delay = 60 + 340 * (progress * progress * progress);
+        setTimeout(step, delay);
+    }
+
+    setTimeout(step, 300);
 }
 
 /* ── Vérifier la vidéo intro ──────────────────────────────────── */

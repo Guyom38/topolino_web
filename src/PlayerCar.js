@@ -132,7 +132,7 @@ export class PlayerCar {
     createNameLabel() {
         const canvas  = document.createElement('canvas');
         canvas.width  = 256;
-        canvas.height = 128;
+        canvas.height = 64;
         this._nameCanvas = canvas;
         this._lastDrawnAngle = null;
         this._drawName();
@@ -140,87 +140,89 @@ export class PlayerCar {
         const tex    = new THREE.CanvasTexture(canvas);
         const mat    = new THREE.SpriteMaterial({ map: tex, depthWrite: false, depthTest: false, transparent: true });
         const sprite = new THREE.Sprite(mat);
-        sprite.scale.set(5.0, 2.5, 1);
+        sprite.scale.set(4.8, 1.2, 1);
         sprite.renderOrder = 9999;
         this._nameSprite = sprite;
         scene.add(sprite);
     }
 
     _drawName() {
-        const W = 256, H = 128;
+        const W = 256, H = 64;
         const ctx = this._nameCanvas.getContext('2d');
         ctx.clearRect(0, 0, W, H);
 
-        const cx = W / 2, tagY = 36;
+        const cy = H / 2;
         const text = this.name;
+        const angle = this._lastDrawnAngle ?? 0;
+        const arrowR = 11; // rayon de la flèche
+        const arrowSpace = arrowR * 2 + 8; // espace flèche + marge
+
         ctx.font = 'bold 28px Arial';
         const tw = ctx.measureText(text).width;
-        const pw = tw + 32, ph = 36;
+        const pw = tw + arrowSpace + 28, ph = 38;
         const r = ph / 2;
+        const px = (W - pw) / 2; // x gauche du pill
 
         // Ombre portée
         ctx.save();
         ctx.shadowColor = 'rgba(0,0,0,0.5)';
         ctx.shadowBlur = 10;
         ctx.shadowOffsetY = 3;
-
-        // Fond pill avec couleur du véhicule
+        // Fond pill couleur véhicule
         ctx.beginPath();
-        ctx.roundRect(cx - pw / 2, tagY - ph / 2, pw, ph, r);
+        ctx.roundRect(px, cy - ph / 2, pw, ph, r);
         ctx.fillStyle = this.colorHex;
         ctx.fill();
         ctx.restore();
 
-        // Bordure blanche fine
+        // Bordure blanche
         ctx.beginPath();
-        ctx.roundRect(cx - pw / 2, tagY - ph / 2, pw, ph, r);
+        ctx.roundRect(px, cy - ph / 2, pw, ph, r);
         ctx.strokeStyle = 'rgba(255,255,255,0.6)';
         ctx.lineWidth = 2;
         ctx.stroke();
 
-        // Texte blanc avec outline sombre
+        // ── Flèche dans le pill (à gauche du texte) ──
+        const arrowCx = px + r + 2;
+        ctx.save();
+        ctx.translate(arrowCx, cy);
+        ctx.rotate(-angle + Math.PI / 2);
+        ctx.beginPath();
+        ctx.moveTo(0, -arrowR);
+        ctx.lineTo(-arrowR * 0.65, arrowR * 0.5);
+        ctx.lineTo(0, arrowR * 0.15);
+        ctx.lineTo(arrowR * 0.65, arrowR * 0.5);
+        ctx.closePath();
+        // Contour sombre épais pour détacher du fond
+        ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+        // Remplissage blanc
+        ctx.fillStyle = '#fff';
+        ctx.fill();
+        // Contour blanc fin par-dessus
+        ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.restore();
+
+        // Texte blanc (décalé à droite de la flèche)
+        const textCx = arrowCx + arrowR + 4 + tw / 2;
         ctx.font         = 'bold 28px Arial';
         ctx.textAlign    = 'center';
         ctx.textBaseline = 'middle';
         ctx.strokeStyle  = 'rgba(0,0,0,0.7)';
         ctx.lineWidth    = 4;
-        ctx.strokeText(text, cx, tagY);
+        ctx.strokeText(text, textCx, cy);
         ctx.fillStyle = '#fff';
-        ctx.fillText(text, cx, tagY);
-
-        // ── Flèche d'orientation ──
-        const arrowY = tagY + ph / 2 + 16;
-        const arrowSize = 14;
-        const angle = this._lastDrawnAngle ?? 0;
-
-        ctx.save();
-        ctx.translate(cx, arrowY);
-        ctx.rotate(-angle); // rotation inversée car sprite face caméra
-
-        // Ombre flèche
-        ctx.shadowColor = 'rgba(0,0,0,0.4)';
-        ctx.shadowBlur = 6;
-        ctx.shadowOffsetY = 2;
-
-        ctx.beginPath();
-        ctx.moveTo(0, -arrowSize);
-        ctx.lineTo(-arrowSize * 0.65, arrowSize * 0.5);
-        ctx.lineTo(0, arrowSize * 0.2);
-        ctx.lineTo(arrowSize * 0.65, arrowSize * 0.5);
-        ctx.closePath();
-        ctx.fillStyle = this.colorHex;
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(255,255,255,0.7)';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        ctx.restore();
+        ctx.fillText(text, textCx, cy);
     }
 
     updateNameLabel() {
         if (!this._nameSprite || !this.car) return;
         this._nameSprite.position.set(
             this.car.position.x,
-            this.car.position.y + (this.carVisual.position.y || 0) + 4.5,
+            this.car.position.y + (this.carVisual.position.y || 0) + 3.2,
             this.car.position.z
         );
 
@@ -230,7 +232,6 @@ export class PlayerCar {
             camera.position.z - this.car.position.z
         );
         const relAngle = this.carAngle - camAngle;
-        // Ne redessiner que si l'angle a changé significativement (perf)
         if (this._lastDrawnAngle === null || Math.abs(relAngle - this._lastDrawnAngle) > 0.08) {
             this._lastDrawnAngle = relAngle;
             this._drawName();

@@ -224,19 +224,96 @@ function _createNameSprite(text, color) {
     const W = 256, H = 64;
     const cv = document.createElement('canvas');
     cv.width = W; cv.height = H;
-    const ctx = cv.getContext('2d');
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.fillRect(4, 4, W - 8, H - 8);
-    ctx.font = 'bold 34px Arial';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = color;
-    ctx.fillText(text.slice(0, 14), W / 2, H / 2 + 2);
+    _drawNameTag(cv, text, color, 0);
     const tex    = new THREE.CanvasTexture(cv);
-    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false }));
-    sprite.scale.set(4.0, 1.0, 1.0);
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
+    sprite.scale.set(4.8, 1.2, 1.0);
+    sprite.renderOrder = 9999;
+    sprite.userData._canvas = cv;
+    sprite.userData._text   = text;
+    sprite.userData._color  = color;
+    sprite.userData._lastAngle = null;
     if (_scene) _scene.add(sprite);
     return sprite;
+}
+
+function _drawNameTag(cv, text, color, arrowAngle) {
+    const W = cv.width, H = cv.height;
+    const ctx = cv.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+
+    const cy = H / 2;
+    const arrowR = 11;
+    const arrowSpace = arrowR * 2 + 8;
+
+    ctx.font = 'bold 28px Arial';
+    const tw = ctx.measureText(text.slice(0, 14)).width;
+    const pw = tw + arrowSpace + 28, ph = 38, r = ph / 2;
+    const px = (W - pw) / 2;
+
+    // Ombre portée
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetY = 3;
+    ctx.beginPath();
+    ctx.roundRect(px, cy - ph / 2, pw, ph, r);
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.restore();
+
+    // Bordure blanche
+    ctx.beginPath();
+    ctx.roundRect(px, cy - ph / 2, pw, ph, r);
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // ── Flèche dans le pill (à gauche du texte) ──
+    const arrowCx = px + r + 2;
+    ctx.save();
+    ctx.translate(arrowCx, cy);
+    ctx.rotate(-arrowAngle + Math.PI / 2);
+    ctx.beginPath();
+    ctx.moveTo(0, -arrowR);
+    ctx.lineTo(-arrowR * 0.65, arrowR * 0.5);
+    ctx.lineTo(0, arrowR * 0.15);
+    ctx.lineTo(arrowR * 0.65, arrowR * 0.5);
+    ctx.closePath();
+    ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.restore();
+
+    // Texte (décalé à droite de la flèche)
+    const textCx = arrowCx + arrowR + 4 + tw / 2;
+    ctx.font         = 'bold 28px Arial';
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.strokeStyle  = 'rgba(0,0,0,0.7)';
+    ctx.lineWidth    = 4;
+    ctx.strokeText(text.slice(0, 14), textCx, cy);
+    ctx.fillStyle = '#fff';
+    ctx.fillText(text.slice(0, 14), textCx, cy);
+}
+
+function _updateNameSprite(sprite, carAngle, carX, carZ) {
+    if (!sprite.userData._canvas) return;
+    const camAngle = Math.atan2(
+        _camera.position.x - carX,
+        _camera.position.z - carZ
+    );
+    const relAngle = carAngle - camAngle;
+    if (sprite.userData._lastAngle === null || Math.abs(relAngle - sprite.userData._lastAngle) > 0.08) {
+        sprite.userData._lastAngle = relAngle;
+        _drawNameTag(sprite.userData._canvas, sprite.userData._text, sprite.userData._color, relAngle);
+        sprite.material.map.needsUpdate = true;
+    }
 }
 
 function _spawnMiniCar(gpIndex) {
@@ -1250,7 +1327,8 @@ function _loop() {
             }
 
             // Feux stop / recul
-            _setBrakeLights(c, c.parkState === 'reversing' || c._wantsLeave || c._leavingReverse || _didBrake);
+            const isStopped = Math.abs(c.vx) < 0.01;
+            _setBrakeLights(c, !isStopped && (c.parkState === 'reversing' || c._wantsLeave || c._leavingReverse || _didBrake));
             _setReverseLights(c, c.parkState === 'reversing' || c._leavingReverse);
 
             // Fumée de capot si garé > 30s
@@ -1326,7 +1404,8 @@ function _loop() {
 
         mc.root.position.set(mc.x, 0, mc.z);
         mc.root.rotation.y = mc.angle;
-        mc.sprite.position.set(mc.x, 1.6, mc.z);
+        mc.sprite.position.set(mc.x, 1.8, mc.z);
+        _updateNameSprite(mc.sprite, mc.angle, mc.x, mc.z);
     }
 
     // ── Collisions OBB + mini-voitures ───────────────────────────────────
@@ -1342,7 +1421,8 @@ function _loop() {
 
     // ── Mise à jour sprites pseudo joueurs ───────────────────────────────────
     for (const { c, sprite } of _titlePlayerCars.values()) {
-        sprite.position.set(c.x, 3.8, c.z);
+        sprite.position.set(c.x, 3.2, c.z);
+        _updateNameSprite(sprite, c.angle, c.x, c.z);
     }
 
     renderer.render(_scene, _camera);
