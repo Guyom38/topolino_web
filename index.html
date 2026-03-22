@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GTA — Game Topolino Amandine</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@400;700&display=swap" rel="stylesheet">
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -29,7 +31,7 @@
 
         /* ═══ TITLE SCREEN ═══ */
         #title-screen {
-            background: radial-gradient(ellipse at 50% 35%, #0a1828 0%, #000510 75%);
+            background: transparent;
             cursor: pointer;
         }
         #cars-bg {
@@ -37,48 +39,88 @@
             width: 100%; height: 100%;
             pointer-events: none; z-index: 0;
         }
+        /* Vignette sombre sur les bords */
         #title-screen::before {
             content: '';
             position: absolute; inset: 0;
-            background-image:
-                linear-gradient(rgba(0,200,255,0.032) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(0,200,255,0.032) 1px, transparent 1px);
-            background-size: 50px 50px;
-            animation: gridScroll 25s linear infinite;
-            pointer-events: none;
+            background:
+                radial-gradient(ellipse 80% 60% at 50% 50%, transparent 40%, rgba(0,0,0,0.55) 100%);
+            pointer-events: none; z-index: 0;
         }
-        @keyframes gridScroll {
-            from { background-position: 0 0; }
-            to   { background-position: 50px 50px; }
-        }
+        /* Dégradé sombre en bas + haut */
         #title-screen::after {
             content: '';
-            position: absolute; bottom: 0; left: 0; right: 0; height: 30vh;
-            background: linear-gradient(to top, rgba(20,20,30,0.85) 0%, transparent 100%);
-            pointer-events: none;
+            position: absolute; inset: 0;
+            background:
+                linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, transparent 22%, transparent 72%, rgba(0,0,0,0.7) 100%);
+            pointer-events: none; z-index: 0;
         }
 
-        .title-content { position: relative; z-index: 1; text-align: center; }
+        .title-content {
+            position: relative; z-index: 1; text-align: center;
+            padding: 28px 70px 22px;
+        }
+        /* Halo sombre derrière le bloc texte pour lisibilité */
+        .title-content::before {
+            content: '';
+            position: absolute; inset: -50px -80px;
+            background: radial-gradient(ellipse at center, rgba(0,0,0,0.62) 0%, transparent 68%);
+            pointer-events: none; z-index: -1;
+        }
 
+        /* "Studio" au-dessus */
+        .title-studio {
+            font-family: 'Oswald', 'Segoe UI', Arial, sans-serif;
+            font-size: clamp(9px, 1.1vw, 13px);
+            letter-spacing: 0.55em; text-transform: uppercase;
+            color: rgba(255,210,100,0.55); margin-bottom: 6px;
+        }
+
+        /* Titre principal TOPOLINO */
         .title-gta {
-            font-size: clamp(48px, 10vw, 120px);
-            font-weight: 900; letter-spacing: 0.08em; line-height: 1;
-            background: linear-gradient(160deg, #ff9f1c 0%, #ffcc00 45%, #ff6b1c 85%);
+            font-family: 'Bebas Neue', 'Impact', 'Arial Black', sans-serif;
+            font-size: clamp(72px, 16vw, 200px);
+            line-height: 0.88; letter-spacing: 0.05em;
+            background: linear-gradient(175deg, #ffe566 0%, #ffaa00 38%, #ff5500 72%, #cc1800 100%);
             -webkit-background-clip: text; -webkit-text-fill-color: transparent;
             background-clip: text;
-            animation: titleGlow 3s ease-in-out infinite;
+            animation: titlePulse 4s ease-in-out infinite;
         }
-        @keyframes titleGlow {
-            0%,100% { filter: drop-shadow(0 0 28px rgba(255,155,0,0.45)); }
-            50%      { filter: drop-shadow(0 0 70px rgba(255,200,0,0.9)); }
+        @keyframes titlePulse {
+            0%,100% { filter:
+                drop-shadow( 3px  3px 0px rgba(0,0,0,1))
+                drop-shadow(-2px -2px 0px rgba(0,0,0,1))
+                drop-shadow( 3px -2px 0px rgba(0,0,0,1))
+                drop-shadow(-2px  3px 0px rgba(0,0,0,1))
+                drop-shadow(0 0 30px rgba(255,140,0,0.35)); }
+            50%      { filter:
+                drop-shadow( 3px  3px 0px rgba(0,0,0,1))
+                drop-shadow(-2px -2px 0px rgba(0,0,0,1))
+                drop-shadow( 3px -2px 0px rgba(0,0,0,1))
+                drop-shadow(-2px  3px 0px rgba(0,0,0,1))
+                drop-shadow(0 0 65px rgba(255,190,0,0.75)); }
         }
-        .title-sub  { font-size: clamp(11px,2vw,18px); letter-spacing:.55em; color:rgba(255,255,255,.5); margin-top:7px; text-transform:uppercase; }
-        .title-year { font-size: 11px; letter-spacing:.4em; color:rgba(255,255,255,.18); margin-top:14px; text-transform:uppercase; }
-        .press-key  {
-            margin-top: 62px;
-            font-size: clamp(11px,1.8vw,16px); letter-spacing:.45em;
-            text-transform:uppercase; color:#ffcc00;
-            animation: blink 1.15s step-end infinite;
+
+        /* Sous-titre "LA CAISSE A MA MERE" */
+        .title-sub {
+            font-family: 'Bebas Neue', 'Impact', sans-serif;
+            font-size: clamp(18px, 3.8vw, 52px);
+            letter-spacing: 0.3em;
+            color: #fff; margin-top: -6px;
+            filter:
+                drop-shadow(2px 2px 0px rgba(0,0,0,0.95))
+                drop-shadow(-1px -1px 0px rgba(0,0,0,0.95))
+                drop-shadow(0 0 18px rgba(255,230,150,0.25));
+            opacity: 0.9;
+        }
+
+        .press-key {
+            margin-top: 52px;
+            font-family: 'Oswald', 'Segoe UI', Arial, sans-serif;
+            font-size: clamp(11px,1.6vw,15px); letter-spacing: 0.5em;
+            text-transform: uppercase; color: rgba(255,210,80,0.9);
+            text-shadow: 0 0 18px rgba(255,170,0,0.7);
+            animation: blink 1.2s step-end infinite;
         }
         @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
 
@@ -237,9 +279,9 @@
 <div id="title-screen" class="screen">
     <canvas id="cars-bg"></canvas>
     <div class="title-content">
+        <div class="title-studio">Guillaume Chaix présente</div>
         <div class="title-gta">TOPOLINO</div>
-        <div class="title-sub">LA CAISSE A MA MERE</div>
-        <div class="title-year">Édition Spéciale · 2026</div>
+        <div class="title-sub">La Caisse à Ma Mère</div>
         <div class="press-key">Appuyez sur une touche</div>
     </div>
 </div>
