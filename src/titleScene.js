@@ -394,7 +394,7 @@ function _smoothNoise(px, py, scale) {
     return a + (b - a) * ux + (c - a) * uy + (a - b - c + d) * ux * uy;
 }
 
-function _createRoadTexture(seed, withParking = false) {
+function _createRoadTexture(seed, withParking = false, withCrossing = false) {
     const W = 2048, H = 512;
     const cv = document.createElement('canvas');
     cv.width = W; cv.height = H;
@@ -488,6 +488,24 @@ function _createRoadTexture(seed, withParking = false) {
         }
     }
 
+    // ── Passage piéton ────────────────────────────────────────────────────
+    if (withCrossing) {
+        const crossPx  = Math.round(W * 0.36);   // côté gauche visible (X ≈ -20)
+        const stripeH  = 18;                      // hauteur d'une bande
+        const stripeG  = 13;                      // espace entre bandes
+        const zoneW    = 90;                      // largeur de la zone passage en X
+        const cx0      = crossPx - zoneW / 2;
+        const roadH    = H - 2 * SIDEWALK;
+        const nStripes = Math.floor(roadH / (stripeH + stripeG)) + 1;
+        // Bandes de trottoir à trottoir (toute la hauteur des deux voies)
+        ctx.fillStyle = 'rgba(255,255,255,0.92)';
+        for (let s = 0; s < nStripes; s++) {
+            const sy = SIDEWALK + s * (stripeH + stripeG);
+            if (sy + stripeH > H - SIDEWALK) break;
+            ctx.fillRect(cx0, sy, zoneW, stripeH);
+        }
+    }
+
     return cv;
 }
 
@@ -498,7 +516,7 @@ function _createRoads() {
 
     // Route du haut (au-dessus du titre) — avec passage piéton
     const geo1 = new THREE.PlaneGeometry(ROAD_LEN, ROAD_W_TOP);
-    const tex1 = new THREE.CanvasTexture(_createRoadTexture(0));
+    const tex1 = new THREE.CanvasTexture(_createRoadTexture(0, false, true));
     const mat1 = new THREE.MeshStandardMaterial({ map: tex1, roughness: 0.92, metalness: 0.05 });
     const road1 = new THREE.Mesh(geo1, mat1);
     road1.rotation.x = -Math.PI / 2;
@@ -719,15 +737,18 @@ function _loop() {
             const LOOK_AHEAD = 14;            // distance de détection
             const BRAKE_DIST = 7;             // début de freinage
 
-            // 1) Accélération vers la vitesse cible
-            if (Math.abs(c.vx) < c.baseSpeed) {
+            // 1) Accélération vers la vitesse cible (pas pendant manœuvre parking)
+            const isParking = c.parkState === 'braking' || c.parkState === 'entering' || c.parkState === 'parked';
+            if (!isParking && Math.abs(c.vx) < c.baseSpeed) {
                 c.vx += c.dir * THRUST;
             }
 
-            // 2) Braquage latéral vers la voie cible
-            const dz = c.targetZ - c.z;
-            c.vz += dz * 0.008;
-            c.vz *= 0.88;
+            // 2) Braquage latéral (désactivé pendant manœuvre parking pour éviter le glissement diagonal)
+            if (!isParking) {
+                const dz = c.targetZ - c.z;
+                c.vz += dz * 0.008;
+                c.vz *= 0.88;
+            }
 
             // 3) Scanner la voiture la plus proche devant (même voie)
             let closestDist = Infinity;
@@ -769,24 +790,20 @@ function _loop() {
                         c.parkState = 'entering';
                     }
                 } else if (c.parkState === 'entering') {
-                    // ── Phase 2 : se ranger de Y3 vers Y2 ────────────────────
+                    // ── Phase 2 : glisser latéralement vers Y2, voiture bien droite ──
                     const spot = PARK_SPOTS[c.parkSpot];
-                    c.targetZ = spot.z;    // viser Y2
-                    // Avancer doucement vers la place
-                    const dx  = spot.x - c.x;
-                    const dxA = Math.abs(dx);
-                    if (dxA > PARK_SNAP) {
-                        c.vx = c.dir * MIN_SPEED * 0.4; // rouler doucement
-                    }
-                    // Snap quand assez proche
-                    if (dxA < PARK_SNAP && Math.abs(c.z - spot.z) < PARK_SNAP) {
+                    c.vx = 0; // arrêt complet en X
+                    const dzS = spot.z - c.z;
+                    c.vz = Math.sign(dzS) * Math.min(Math.abs(dzS) * 0.12, MIN_SPEED * 0.8);
+                    c.angle = c.dir > 0 ? 0 : Math.PI; // angle fixe
+                    if (Math.abs(dzS) < PARK_SNAP) {
                         c.x = spot.x;
                         c.z = spot.z;
                         c.vx = 0; c.vz = 0;
                         c.parkState    = 'parked';
                         c.parkDuration = PARK_DURATION_MIN + Math.random() * (PARK_DURATION_MAX - PARK_DURATION_MIN);
                         c.parkTimer    = now;
-                        c.angle = c.dir > 0 ? 0 : Math.PI;
+                        c.angle        = c.dir > 0 ? 0 : Math.PI;
                     }
                 } else if (c.parkState === 'parked') {
                     // ── Phase 3 : garée, attendre 10s ────────────────────────
@@ -887,8 +904,14 @@ function _loop() {
             // 7) Boucle : haut sort à droite → bas entre à droite ; bas sort à gauche → haut entre à gauche
             //    Ne pas boucler si la voiture est garée ou en approche
             if (!c.parkState) {
-                if (c.road === 0 && c.x > ROAD_HALF_LEN)       _switchRoad(c, 1);
-                else if (c.road === 1 && c.x < -ROAD_HALF_LEN) _switchRoad(c, 0);
+                if (c.road === 0 && c.x > ROAD_HALF_LEN) {
+                    // Garder au moins 5 voitures sur le haut
+                    const topCount = _cars.filter(o => o.road === 0).length;
+                    if (topCount <= 5) _switchRoad(c, 0); // reboucle sur la route du haut
+                    else               _switchRoad(c, 1);
+                } else if (c.road === 1 && c.x < -ROAD_HALF_LEN) {
+                    _switchRoad(c, 0);
+                }
             }
         }
 
@@ -900,10 +923,11 @@ function _loop() {
         c.x += c.vx;
         c.z += c.vz;
 
-        // ── Orientation (face la direction du mouvement) ─────────────────
+        // ── Orientation (face la direction du mouvement, figée pendant parking) ──
         if (!pe) {
             const sp2 = Math.hypot(c.vx, c.vz);
-            if (sp2 > MIN_SPEED * 0.4) {
+            const lockAngle = c.parkState === 'entering' || c.parkState === 'parked' || c.parkState === 'braking';
+            if (!lockAngle && sp2 > MIN_SPEED * 0.4) {
                 const target = Math.atan2(-c.vz, c.vx);
                 let da = target - c.angle;
                 while (da >  Math.PI) da -= 2 * Math.PI;
