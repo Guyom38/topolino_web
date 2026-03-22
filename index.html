@@ -242,6 +242,83 @@
 
         @keyframes parkingBlink { 0%,100%{opacity:1} 50%{opacity:0.15} }
 
+        /* ═══ TITLE → MODES OVERLAY ═══ */
+        .title-content {
+            transition: transform 0.55s cubic-bezier(0.4,0,1,1), opacity 0.4s;
+        }
+        .title-content.slide-out {
+            transform: translateX(-130vw);
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        #modes-overlay {
+            position: absolute; left: 0; right: 0;
+            top: calc(50% - 40px); transform: translateY(-52%);
+            display: flex; align-items: center; gap: 0;
+            padding: 0 14px; z-index: 2;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.45s 0.28s;
+        }
+        #modes-overlay.visible { opacity: 1; pointer-events: all; }
+
+        .modes-arrow {
+            flex-shrink: 0; width: 44px; height: 44px;
+            background: rgba(0,0,0,0.72); backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.18); border-radius: 50%;
+            color: #fff; font-size: 16px; cursor: pointer; margin: 0 8px;
+            display: flex; align-items: center; justify-content: center;
+            transition: background .2s, border-color .2s, color .2s, opacity .2s;
+        }
+        .modes-arrow:hover:not(:disabled) {
+            background: rgba(255,200,0,0.22);
+            border-color: rgba(255,200,0,0.55);
+            color: #ffcc00;
+        }
+        .modes-arrow:disabled { opacity: 0.2; cursor: default; }
+        .modes-arrow.hidden-arrow { visibility: hidden; pointer-events: none; }
+
+        #modes-viewport {
+            flex: 1; overflow: hidden;
+            /* Fondu uniquement à droite — la gauche reste nette pour la 1re carte */
+            -webkit-mask-image: linear-gradient(to right, #000 85%, transparent 100%);
+            mask-image: linear-gradient(to right, #000 85%, transparent 100%);
+        }
+        /* Quand on scrolle, fondu aussi à gauche */
+        #modes-viewport.scrolled {
+            -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 8%, #000 85%, transparent 100%);
+            mask-image: linear-gradient(to right, transparent 0%, #000 8%, #000 85%, transparent 100%);
+        }
+        #modes-track {
+            display: flex; gap: 13px;
+            transition: transform 0.42s cubic-bezier(0.25,0.46,0.45,0.94);
+            padding: 18px 10px 22px;
+        }
+
+        .mode-vig {
+            flex: 0 0 158px; min-height: 205px;
+            background: rgba(4,8,20,0.84);
+            backdrop-filter: blur(14px);
+            border: 1px solid rgba(255,255,255,0.09);
+            border-radius: 18px; padding: 20px 13px 16px;
+            cursor: pointer; text-align: center;
+            display: flex; flex-direction: column; align-items: center;
+            transition: transform .2s, border-color .2s, background .2s, box-shadow .2s;
+            position: relative; overflow: hidden;
+        }
+        .mode-vig::before {
+            content: ''; position: absolute; inset: 0;
+            background: radial-gradient(circle at 50% -15%, rgba(255,255,255,.07) 0%, transparent 60%);
+            opacity: 0; transition: opacity .2s;
+        }
+        .mode-vig:hover { transform: translateY(-7px) scale(1.04); border-color: rgba(255,200,0,.5); background: rgba(25,15,0,.88); box-shadow: 0 14px 45px rgba(0,0,0,.85), 0 0 0 1px rgba(255,200,0,.22), 0 0 35px rgba(255,170,0,.12); }
+        .mode-vig:hover::before { opacity: 1; }
+        .mode-vig:active { transform: translateY(-3px) scale(1.01); }
+        .mode-vig .v-icon { font-size: 40px; margin-bottom: 9px; line-height: 1; }
+        .mode-vig .v-name { font-family: 'Bebas Neue', Impact, 'Arial Black', sans-serif; font-size: 20px; letter-spacing: .07em; color: #fff; }
+        .mode-vig .v-desc { font-size: 9.5px; color: rgba(255,255,255,.38); margin-top: 7px; line-height: 1.5; flex: 1; }
+        .mode-vig .v-badge { position: absolute; top: 9px; right: 9px; background: #ff6b1c; color: #fff; font-size: 7px; font-weight: 900; padding: 2px 7px; border-radius: 20px; letter-spacing: .1em; text-transform: uppercase; }
+
         /* ═══ WAITING OVERLAY ═══ */
         #waiting-screen {
             position: absolute; inset: 0;
@@ -283,6 +360,12 @@
         <div class="title-gta">TOPOLINO</div>
         <div class="title-sub">La Caisse à Ma Mère</div>
         <div class="press-key">Appuyez sur une touche</div>
+    </div>
+    <!-- Vignettes modes — apparaissent sur le terre-plein après le clic -->
+    <div id="modes-overlay">
+        <button class="modes-arrow" id="modes-prev" onclick="_modesPrev()" aria-label="Précédent">◀</button>
+        <div id="modes-viewport"><div id="modes-track"></div></div>
+        <button class="modes-arrow" id="modes-next" onclick="_modesNext()" aria-label="Suivant">▶</button>
     </div>
 </div>
 
@@ -413,22 +496,77 @@ if (MODE) {
 /* ── Title screen ─────────────────────────────────────────────── */
 function _showTitle() {
     const el = document.getElementById('title-screen');
-    let armed = false;
-    const go_ = () => {
-        if (!armed) return;
-        el.classList.add('hidden');
-        _checkVideo();
+    let armed = false, shown = false;
+    const _reveal = () => {
+        if (!armed || shown) return;
+        shown = true;
+        document.removeEventListener('keydown', _onTitleKey);
+        el.style.cursor = 'default';
+        _playTick();
+        _showModesOverlay();
+    };
+    const _onTitleClick = (e) => {
+        if (e.target.closest('.mode-vig') || e.target.closest('.modes-arrow')) return;
+        _reveal();
+    };
+    const _onTitleKey = (e) => {
+        if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','KeyA','KeyD','KeyW','KeyS'].includes(e.code)) return;
+        _reveal();
     };
     setTimeout(() => {
         armed = true;
-        const _onTitleKey = (e) => {
-            if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','KeyA','KeyD','KeyW','KeyS'].includes(e.code)) return;
-            document.removeEventListener('keydown', _onTitleKey);
-            _playTick(); go_();
-        };
         document.addEventListener('keydown', _onTitleKey);
-        el.addEventListener('click', () => { _playTick(); go_(); }, { once: true });
+        el.addEventListener('click', _onTitleClick);
     }, 700);
+}
+
+/* ── Vignettes de modes sur le terre-plein ─────────────────── */
+const _MODES = [
+    { icon:'🏔', name:'Conduite Libre',  desc:'Terrain infini, montagnes et physique drift',             mode:'drive' },
+    { icon:'🏁', name:'Circuit',         desc:'Course sur circuit — feux, caméra leader, 5 pts',         mode:'circuit', badge:'NEW' },
+    { icon:'🧳', name:'Poursuite',        desc:'Vole la valise et garde-la le plus longtemps !',          mode:'chase' },
+    { icon:'🅿',  name:'Parking',         desc:'Gare ta voiture dans les emplacements en un min',         mode:'parking' },
+    { icon:'🌀', name:'Tron',             desc:'Trace des murs lumineux — évite-les pour survivre',       mode:'tron' },
+    { icon:'💥', name:'Derby',            desc:'Pousse tes adversaires hors de l\'arène circulaire',      mode:'derby' },
+    { icon:'🎈', name:'Battle Ballons',   desc:'Crève les ballons de tes adversaires avant eux',          mode:'battle' },
+    { icon:'⚽', name:'Football',         desc:'Deux équipes, un ballon géant — marquez des buts !',      mode:'foot' },
+];
+let _modesOff = 0;
+
+function _modesVis() {
+    const vp = document.getElementById('modes-viewport');
+    return vp ? Math.max(1, Math.floor(vp.offsetWidth / 171)) : 5;
+}
+function _modesRefresh() {
+    const maxOff = _MODES.length - _modesVis();
+    document.getElementById('modes-track').style.transform = `translateX(-${_modesOff * 171}px)`;
+    const atStart = _modesOff <= 0;
+    const atEnd   = _modesOff >= maxOff;
+    const prev = document.getElementById('modes-prev');
+    const next = document.getElementById('modes-next');
+    prev.classList.toggle('hidden-arrow', atStart);
+    next.classList.toggle('hidden-arrow', atEnd);
+    // Fondu gauche uniquement quand on a scrollé
+    document.getElementById('modes-viewport').classList.toggle('scrolled', !atStart);
+}
+function _modesPrev() { if (_modesOff > 0) { _modesOff--; _modesRefresh(); } }
+function _modesNext() { if (_modesOff < _MODES.length - _modesVis()) { _modesOff++; _modesRefresh(); } }
+
+function _showModesOverlay() {
+    document.querySelector('.title-content').classList.add('slide-out');
+    const track = document.getElementById('modes-track');
+    track.innerHTML = _MODES.map(m => `
+        <div class="mode-vig" onclick="go('${m.mode}')" onmouseenter="_playTick()">
+            ${m.badge ? `<span class="v-badge">${m.badge}</span>` : ''}
+            <span class="v-icon">${m.icon}</span>
+            <div class="v-name">${m.name}</div>
+            <div class="v-desc">${m.desc}</div>
+        </div>`).join('');
+    const ov = document.getElementById('modes-overlay');
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+        ov.classList.add('visible');
+        _modesRefresh();
+    }));
 }
 
 /* ── Vérifier la vidéo intro ──────────────────────────────────── */
