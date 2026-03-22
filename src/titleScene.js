@@ -982,8 +982,8 @@ function _createHaloTexture() {
 }
 
 function _createStreetLights() {
-    const SPACING   = 14;       // espacement entre lampadaires
     const POLE_H    = 3.8;      // hauteur totale du poteau
+    const LAMP_POSITIONS = [-12, 12]; // un lampadaire de chaque côté
     const Z_LINE    = (ROAD_TOP_Z + 6 + ROAD_BOT_Z - 4.2) / 2; // centre du terre-plein
 
     // Matériaux partagés
@@ -1011,7 +1011,7 @@ function _createStreetLights() {
     haloTex.magFilter = THREE.LinearFilter;
     haloTex.minFilter = THREE.LinearMipmapLinearFilter;
 
-    for (let x = -ROAD_HALF_LEN + 6; x <= ROAD_HALF_LEN - 6; x += SPACING) {
+    for (const x of LAMP_POSITIONS) {
         const grp = new THREE.Group();
 
         // Socle épais
