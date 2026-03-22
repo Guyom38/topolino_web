@@ -15,6 +15,7 @@ import { startTitleMusic, startRandomRadio, stopMusic } from './audio.js';
 import { updateOffscreenArrows, disposeOffscreenArrows } from './offscreen.js';
 import { initTitleScene, disposeTitleScene } from './titleScene.js';
 import { initBarrier, updateBarrier, applyBarrier } from './barrier.js';
+import { initMountains } from './mountains.js';
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 loadSettings();
@@ -51,7 +52,8 @@ async function startDriveMode(shouldRun) {
     startRandomRadio();
     await initMultiplayer();
     updateTerrain(0); // initialiser les patches dès le départ (spawn différé)
-    initBarrier();    // mur circulaire de délimitation du terrain
+    initBarrier();    // mur carré de délimitation du terrain
+    initMountains();  // montagnes décoratives autour de la zone
 
     function animate() {
         if (shouldRun && !shouldRun()) return;

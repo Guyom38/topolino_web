@@ -204,9 +204,8 @@ export function updateCamera(players) {
         const R         = Math.sqrt(sumCos * sumCos + sumSin * sumSin) / n;
         const meanAngle = Math.atan2(sumSin, sumCos); // direction moyenne du groupe
 
-        // ── PHI : top-down si dispersés, 60° si regroupés ─────────────────
-        const targetPHI = THREE.MathUtils.lerp(0.05, Math.PI / 3, R);
-        PHI += (targetPHI - PHI) * 0.025;
+        // ── PHI fixe 30° ──────────────────────────────────────────────────
+        PHI += (Math.PI / 6 - PHI) * 0.025;
 
         // ── THETA : caméra à l'opposé du groupe ───────────────────────────
         // Deadzone : ne tourne que si la correction dépasse ~25°.
