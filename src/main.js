@@ -14,6 +14,7 @@ import { updateSmoke }  from './smoke.js';
 import { startTitleMusic, startRandomRadio, stopMusic } from './audio.js';
 import { updateOffscreenArrows, disposeOffscreenArrows } from './offscreen.js';
 import { initTitleScene, disposeTitleScene } from './titleScene.js';
+import { initBarrier, updateBarrier, applyBarrier } from './barrier.js';
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 loadSettings();
@@ -50,6 +51,7 @@ async function startDriveMode(shouldRun) {
     startRandomRadio();
     await initMultiplayer();
     updateTerrain(0); // initialiser les patches dès le départ (spawn différé)
+    initBarrier();    // mur circulaire de délimitation du terrain
 
     function animate() {
         if (shouldRun && !shouldRun()) return;
@@ -61,6 +63,7 @@ async function startDriveMode(shouldRun) {
         for (const p of players.values()) {
             if (!p.car) continue;
             updatePhysics(p, getHeightAt(p.car.position.x, p.car.position.z));
+            applyBarrier(p);
         }
 
         updateCollisions(players);
@@ -117,6 +120,7 @@ async function startDriveMode(shouldRun) {
             scene.fog.color.copy(sky);
         }
 
+        updateBarrier();
         updateOffscreenArrows(players);
         updateSparks(now);
         updateUI(players);

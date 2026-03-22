@@ -60,6 +60,17 @@ export function getHeightAt(x, z) {
     // Buttes de saut (conduite libre uniquement — ni chase, ni foot)
     if (!isChase && !isFoot) h += _jumpBumpAt(x, z);
 
+    // Fondu progressif vers 0 à l'approche de la barrière (conduite libre)
+    // Permet à la caméra de voir le joueur sans que les collines masquent la vue
+    if (!isChase && !isFoot) {
+        const FADE_START = 118;   // début du fondu
+        const FADE_END   = 148;   // terrain plat (juste avant le mur à r=150)
+        if (dist > FADE_START) {
+            const t = Math.min(1.0, (dist - FADE_START) / (FADE_END - FADE_START));
+            h *= 1.0 - t * t * (3.0 - 2.0 * t); // smoothstep
+        }
+    }
+
     // En mode poursuite, on surélève tout de 20m pour éviter que les vallées
     // ne descendent sous le seuil de respawn (-15m)
     return isChase ? h + 20.0 : h;

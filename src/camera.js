@@ -2,9 +2,9 @@ import * as THREE from 'three';
 import { camera } from './scene.js';
 
 // ── Paramètres orbitaux ───────────────────────────────────────────────────────
-let PHI    = 0.92;           // angle vertical depuis le zénith (rad)
+let PHI    = 0.52;           // angle vertical depuis le zénith (rad)
 let THETA  = Math.PI * 0.80; // angle horizontal (rad)
-let RADIUS = 28;             // distance caméra–cible (auto-gérée en mode conduite)
+let RADIUS = 36;             // distance caméra–cible (auto-gérée en mode conduite)
 
 const RADIUS_MIN  = 10;
 const RADIUS_MAX  = 200;
@@ -134,10 +134,11 @@ export function updateCamera(players) {
     }
 
     // Centroïde de tous les joueurs actifs
-    let cx = 0, cz = 0;
+    let cx = 0, cy = 0, cz = 0;
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
     for (const p of active) {
         cx += p.car.position.x;
+        cy += p.car.position.y;
         cz += p.car.position.z;
         minX = Math.min(minX, p.car.position.x);
         maxX = Math.max(maxX, p.car.position.x);
@@ -145,8 +146,11 @@ export function updateCamera(players) {
         maxZ = Math.max(maxZ, p.car.position.z);
     }
     cx /= active.length;
+    cy /= active.length;
     cz /= active.length;
-    _centroid.set(cx, 0, cz);
+    // Suivre la hauteur réelle du joueur (vallées, collines)
+    // Clamp pour éviter les extrêmes (grands sauts, chutes)
+    _centroid.set(cx, THREE.MathUtils.clamp(cy, -9, 16), cz);
 
     // Mise à jour de la cible interpolée
     if (_fixedTarget) {
@@ -160,8 +164,8 @@ export function updateCamera(players) {
     // Auto-zoom dynamique (mode conduite uniquement)
     if (_autoZoom) {
         const span        = Math.max(maxX - minX, maxZ - minZ);
-        // Rayon auto : base 22 + 0.7× l'écartement max des joueurs
-        const autoRadius  = THREE.MathUtils.clamp(span * 0.7 + 22, 20, 90);
+        // Rayon auto : base 38 + 0.7× l'écartement max des joueurs
+        const autoRadius  = THREE.MathUtils.clamp(span * 0.7 + 38, 34, 100);
         const targetRadius = THREE.MathUtils.clamp(autoRadius + _userZoom, RADIUS_MIN, RADIUS_MAX);
         // Interpolation fluide pour éviter les sauts
         RADIUS += (targetRadius - RADIUS) * 0.045;
