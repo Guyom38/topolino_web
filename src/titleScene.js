@@ -63,6 +63,7 @@ let _running     = false;
 let _animId      = null;
 let _fbxTemplate = null;  // référence au template FBX pour les mini-voitures
 let _qrMesh      = null;
+let _smokeTex    = null;
 
 // ── Contrôle joueurs sur la page de titre ────────────────────────────────────
 const _titlePlayerCars = new Map(); // id → { c, sprite, keys }
@@ -595,6 +596,88 @@ function _createRoadTexture(seed, withParking = false, withCrossing = false) {
     return cv;
 }
 
+// ── Fumée de capot (voitures garées > 30s) ───────────────────────────────────
+
+function _getSmokeTex() {
+    if (_smokeTex) return _smokeTex;
+    const S = 64;
+    const cv = document.createElement('canvas');
+    cv.width = S; cv.height = S;
+    const ctx = cv.getContext('2d');
+    const g = ctx.createRadialGradient(S/2, S/2, 0, S/2, S/2, S/2);
+    g.addColorStop(0,    'rgba(255,255,255,1.0)');
+    g.addColorStop(0.45, 'rgba(245,245,248,0.75)');
+    g.addColorStop(1,    'rgba(220,220,230,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, S, S);
+    _smokeTex = new THREE.CanvasTexture(cv);
+    return _smokeTex;
+}
+
+class SmokeSystem {
+    constructor(c) {
+        this._c    = c;
+        this._pts  = [];
+        this._next = 0;
+    }
+
+    update(now) {
+        if (now >= this._next) {
+            this._emit();
+            this._next = now + 160 + Math.random() * 260;
+        }
+        for (let i = this._pts.length - 1; i >= 0; i--) {
+            const p = this._pts[i];
+            const t = (now - p.born) / p.life;
+            if (t >= 1) {
+                _scene?.remove(p.sp);
+                p.sp.material.dispose();
+                this._pts.splice(i, 1);
+                continue;
+            }
+            p.sp.position.y += p.vy;
+            p.sp.position.x += p.vx;
+            p.sp.position.z += p.vz;
+            p.sp.scale.setScalar(p.s0 + (p.s1 - p.s0) * t);
+            p.sp.material.opacity = p.op * (1 - t * t);
+        }
+    }
+
+    _emit() {
+        if (!_scene) return;
+        const c  = this._c;
+        const hx = c.x + Math.cos(c.angle) * CAR_HL * 0.55 + (Math.random() - 0.5) * 0.18;
+        const hz = c.z - Math.sin(c.angle) * CAR_HL * 0.55 + (Math.random() - 0.5) * 0.18;
+        const hy = 0.5 + Math.random() * 0.12;
+        const mat = new THREE.SpriteMaterial({
+            map: _getSmokeTex(), transparent: true,
+            opacity: 0.65, depthWrite: false,
+        });
+        const sp = new THREE.Sprite(mat);
+        sp.position.set(hx, hy, hz);
+        const s0 = 0.07 + Math.random() * 0.06;
+        sp.scale.setScalar(s0);
+        _scene.add(sp);
+        this._pts.push({
+            sp, born: performance.now(),
+            life: 1500 + Math.random() * 1100,
+            vx: (Math.random() - 0.5) * 0.004,
+            vy: 0.013 + Math.random() * 0.009,
+            vz: (Math.random() - 0.5) * 0.004,
+            s0, s1: 0.55 + Math.random() * 0.35,
+            op: 0.5 + Math.random() * 0.25,
+        });
+    }
+
+    dispose() {
+        for (const p of this._pts) {
+            _scene?.remove(p.sp);
+            p.sp.material.dispose();
+        }
+        this._pts = [];
+    }
+}
+
 function _createQRSign(url) {
     if (typeof QRCode === 'undefined') return;
     // QRCode.js doit être dans le DOM pour fonctionner
@@ -755,6 +838,7 @@ export async function initTitleScene() {
             _leaveT: 0,                              // sortie bezier
             _wantsLeave: false,                      // en attente de sortir du parking
             brakeMeshes, reverseMeshes,              // feux stop / recul
+            smoke: null,                             // SmokeSystem si garé > 30s
         };
         _cars.push(c);
         const idx   = road === 0 ? i : i - CARS_TOP;
@@ -1130,6 +1214,14 @@ function _loop() {
             _setBrakeLights(c, c.parkState === 'braking' || c._wantsLeave || _didBrake);
             _setReverseLights(c, c.parkState === 'reversing');
 
+            // Fumée de capot si garé > 30s
+            if (c.parkState === 'parked') {
+                if (performance.now() - c.parkTimer > 30000 && !c.smoke) c.smoke = new SmokeSystem(c);
+                if (c.smoke) c.smoke.update(performance.now());
+            } else if (c.smoke) {
+                c.smoke.dispose(); c.smoke = null;
+            }
+
             // 7) Boucle : haut sort à droite → bas entre à droite ; bas sort à gauche → haut entre à gauche
             //    Ne pas boucler si la voiture est garée ou en approche
             if (!c.parkState) {
@@ -1186,6 +1278,13 @@ function _loop() {
         if (sp > MINI_MAX_SPD) { mc.vx = mc.vx / sp * MINI_MAX_SPD; mc.vz = mc.vz / sp * MINI_MAX_SPD; }
         mc.x += mc.vx;
         mc.z += mc.vz;
+        // Bornes perspective-correctes : frustum trapézoïdal (large en haut, étroit en bas)
+        const _xLim = Math.max(2, (9.22 + 0.64 * (10 - mc.z)) * 0.82);
+        if (mc.x >  _xLim) { mc.x =  _xLim; mc.vx *= -0.5; }
+        if (mc.x < -_xLim) { mc.x = -_xLim; mc.vx *= -0.5; }
+        if (mc.z >   6.5)  { mc.z =   6.5;  mc.vz *= -0.5; }
+        if (mc.z < -16.0)  { mc.z = -16.0;  mc.vz *= -0.5; }
+
         mc.root.position.set(mc.x, 0, mc.z);
         mc.root.rotation.y = mc.angle;
         mc.sprite.position.set(mc.x, 1.6, mc.z);
@@ -1273,5 +1372,8 @@ export function disposeTitleScene() {
     renderer.shadowMap.enabled = false;
     renderer.domElement.style.display = 'none'; // caché jusqu'au démarrage du jeu
     _scene = _camera = null;
+    // Nettoyer fumée
+    for (const c of _cars) { if (c.smoke) { c.smoke.dispose(); c.smoke = null; } }
+    if (_smokeTex) { _smokeTex.dispose(); _smokeTex = null; }
     _cars  = [];
 }
