@@ -595,7 +595,7 @@
     </div>
     <div id="fps-counter">FPS: —</div>
     <div id="cam-debug">—</div>
-    <button id="back-btn" onclick="window.location.href='/'">← Menu</button>
+    <button id="back-btn" onclick="_backToMenu()">← Menu</button>
     <div id="mode-label"></div>
 </div>
 
@@ -858,6 +858,13 @@ function _showMenu() {
     document.getElementById('menu-screen').classList.remove('hidden');
     _buildMenuGrid();
     _generateMenuQR();
+}
+
+/* ── Retour au menu sans rechargement (conserve le plein écran) ── */
+function _backToMenu() {
+    if (window._stopGameMode) window._stopGameMode();
+    history.pushState({}, '', '/');
+    _showMenu();
 }
 
 function _buildMenuGrid() {

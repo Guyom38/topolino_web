@@ -493,6 +493,16 @@ function _launchMode(mode) {
     else                         startDriveMode(shouldRun);
 }
 
+// Exposé pour revenir au menu SANS recharger la page (conserve le plein écran)
+window._stopGameMode = function() {
+    _currentLoopId++;   // coupe la boucle courante
+    stopMusic();
+    const _gui = document.getElementById('game-ui');
+    if (_gui) { _gui.style.display = 'none'; _gui.classList.add('hidden'); }
+    const lbl = document.getElementById('mode-label');
+    if (lbl) lbl.textContent = '';
+};
+
 // Exposé pour démarrage depuis le menu SANS rechargement de page
 // (conserve le geste utilisateur → autoplay audio garanti)
 window._startGameMode = function(mode) {
