@@ -3,14 +3,14 @@ import { loadSettings, applyAllSettings, settings, scheduleFrame } from './setti
 import { initSettingsUI } from './settingsUI.js';
 import { scene, camera, renderer, sun, ambient } from './scene.js';
 import { updatePhysics } from './physics.js';
-import { updateCamera, updateChaseCamera, tickCameraDebug } from './camera.js';
-import { updateTerrain, getHeightAt, refreshTerrain } from './terrain.js';
+import { updateCamera, updateChaseCamera } from './camera.js';
+import { updateTerrain, getHeightAt, refreshTerrain, resetTerrain } from './terrain.js';
 import { updateCollisions, updateEnvironmentCollisions } from './collisions.js';
 import { players, initMultiplayer, getLocalPlayer, pollGamepads } from './multiplayer.js';
 import { initUI, updateUI, setPlayerScore } from './ui.js';
 import { initChaseRocks, collidables, bushes } from './rocks.js';
-import { updateSparks } from './sparks.js';
-import { updateSmoke }  from './smoke.js';
+import { updateSparks, disposeSparks } from './sparks.js';
+import { updateSmoke, disposeSmoke }   from './smoke.js';
 import { startTitleMusic, startRandomRadio, stopMusic } from './audio.js';
 import { updateOffscreenArrows, disposeOffscreenArrows } from './offscreen.js';
 import { initTitleScene, disposeTitleScene } from './titleScene.js';
@@ -103,7 +103,6 @@ async function startDriveMode(shouldRun) {
         updateBarrier();
         updateOffscreenArrows(players);
         updateSparks(now);
-        tickCameraDebug(now);
         updateUI(players);
         renderer.render(scene, camera);
     }
@@ -112,8 +111,9 @@ async function startDriveMode(shouldRun) {
 
 // ── Mode parking ──────────────────────────────────────────────────────────────
 async function startParkingMode(shouldRun) {
-    const { initParkingMode, updateParkingMode, getParkingTerrainY, isParkingActive, getStaticCars } =
+    const { initParkingMode, updateParkingMode, getParkingTerrainY, isParkingActive, getStaticCars, disposeParkingMode } =
         await import('./parking/ParkingMode.js');
+    _disposeCurrentMode = disposeParkingMode;
 
     initUI();
     startRandomRadio();
@@ -232,6 +232,7 @@ async function startChaseMode(shouldRun) {
 async function startTronMode(shouldRun) {
     const { initTronMode, updateTronMode, disposeTronMode } =
         await import('./modes/TronMode.js');
+    _disposeCurrentMode = disposeTronMode;
     const { loadCarForPlayer: loadCar } = await import('./car.js');
     const { createTrackSystem: mkTracks } = await import('./tracks.js');
     const { createShadow: mkShadow } = await import('./shadow.js');
@@ -285,8 +286,9 @@ async function startTronMode(shouldRun) {
 
 // ── Mode Derby ─────────────────────────────────────────────────────────────────
 async function startDerbyMode(shouldRun) {
-    const { initDerbyMode, updateDerbyMode, isDerbyActive, getDuneHeight } =
+    const { initDerbyMode, updateDerbyMode, isDerbyActive, getDuneHeight, disposeDerbyMode } =
         await import('./modes/DerbyMode.js');
+    _disposeCurrentMode = disposeDerbyMode;
 
     initUI();
     startRandomRadio();
@@ -329,8 +331,9 @@ async function startDerbyMode(shouldRun) {
 
 // ── Mode Battle ────────────────────────────────────────────────────────────────
 async function startBattleMode(shouldRun) {
-    const { initBattleMode, updateBattleMode, isBattleActive } =
+    const { initBattleMode, updateBattleMode, isBattleActive, disposeBattleMode } =
         await import('./modes/BattleMode.js');
+    _disposeCurrentMode = disposeBattleMode;
 
     initUI();
     startRandomRadio();
@@ -383,8 +386,9 @@ async function startBattleMode(shouldRun) {
 
 // ── Mode Football ──────────────────────────────────────────────────────────────
 async function startFootMode(shouldRun) {
-    const { initFootMode, updateFootMode } =
+    const { initFootMode, updateFootMode, disposeFootMode } =
         await import('./modes/FootMode.js');
+    _disposeCurrentMode = disposeFootMode;
 
     initUI();
     startRandomRadio();
@@ -422,8 +426,9 @@ async function startFootMode(shouldRun) {
 
 // ── Mode Circuit (Micro Machines) ─────────────────────────────────────────────
 async function startCircuitMode(shouldRun) {
-    const { initCircuitMode, updateCircuitMode, updateCircuitCamera, isCircuitActive } =
+    const { initCircuitMode, updateCircuitMode, updateCircuitCamera, isCircuitActive, disposeCircuitMode } =
         await import('./modes/CircuitMode.js');
+    _disposeCurrentMode = disposeCircuitMode;
 
     initUI();
     startRandomRadio();
@@ -473,12 +478,39 @@ const LABELS_MAP = {
     battle:'🎈 Battle',        foot:'⚽ Football',
 };
 
-let _currentLoopId = 0;
+let _currentLoopId   = 0;
+let _disposeCurrentMode = null; // dispose du mode actif
+
+// ── Nettoyage de la scène entre les modes ─────────────────────────────────────
+function _clearGameScene() {
+    // 1. Dispose du mode courant (réinitialise son état interne)
+    if (_disposeCurrentMode) { try { _disposeCurrentMode(); } catch(e) {} _disposeCurrentMode = null; }
+
+    // 2. Smoke / sparks / flèches
+    try { disposeSmoke(); }  catch(e) {}
+    try { disposeSparks(); } catch(e) {}
+    disposeOffscreenArrows();
+
+    // 3. Terrain
+    resetTerrain();
+
+    // 4. Retirer TOUT de la scène sauf les lumières permanentes
+    const keep = new Set([ambient, sun, sun.target]);
+    for (const obj of [...scene.children].filter(c => !keep.has(c))) {
+        scene.remove(obj);
+        obj.traverse(child => {
+            child.geometry?.dispose();
+            const mats = Array.isArray(child.material) ? child.material : (child.material ? [child.material] : []);
+            mats.forEach(m => { try { m.map?.dispose(); m.dispose(); } catch(e) {} });
+        });
+    }
+}
 
 function _launchMode(mode) {
     stopMusic(); // Arrêter la musique précédente
     _currentLoopId++;
     const loopId = _currentLoopId;
+    _clearGameScene();
 
     // Fonction pour vérifier si on doit continuer la boucle
     const shouldRun = () => loopId === _currentLoopId;
@@ -497,6 +529,7 @@ function _launchMode(mode) {
 window._stopGameMode = function() {
     _currentLoopId++;   // coupe la boucle courante
     stopMusic();
+    _clearGameScene();
     const _gui = document.getElementById('game-ui');
     if (_gui) { _gui.style.display = 'none'; _gui.classList.add('hidden'); }
     const lbl = document.getElementById('mode-label');

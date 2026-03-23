@@ -48,27 +48,10 @@ document.addEventListener('wheel', e => {
     _userZoom = THREE.MathUtils.clamp(_userZoom + e.deltaY * 0.05, -30, 60);
 }, { passive: true });
 
-// ── Debug console (toutes les secondes) ───────────────────────────────────────
-let _lastLog = 0;
-export function tickCameraDebug(now) {
-    if (now - _lastLog < 1000) return;
-    _lastLog = now;
-    console.log(`[Caméra] PHI=${(PHI * 180 / Math.PI).toFixed(1)}°  THETA=${(THETA * 180 / Math.PI).toFixed(1)}°  RADIUS=${RADIUS.toFixed(1)}  target=(${currentTarget.x.toFixed(1)}, ${currentTarget.y.toFixed(1)}, ${currentTarget.z.toFixed(1)})`);
-}
-
 // ── État interne ──────────────────────────────────────────────────────────────
 const currentTarget = new THREE.Vector3();
 let   initialized   = false;
 const _centroid     = new THREE.Vector3();
-
-// ── Debug ─────────────────────────────────────────────────────────────────────
-export function getCameraDebug() {
-    return {
-        phi:    (PHI   * 180 / Math.PI).toFixed(1),
-        theta:  (THETA * 180 / Math.PI).toFixed(1),
-        radius: RADIUS.toFixed(1),
-    };
-}
 
 // ── Cible fixe optionnelle (modes arène) ──────────────────────────────────────
 let _fixedTarget = null;

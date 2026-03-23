@@ -350,6 +350,17 @@ function _ensurePatches() {
     }
 }
 
+export function resetTerrain() {
+    if (patches) {
+        for (const p of patches) {
+            scene.remove(p);
+            p.geometry.dispose();
+            p.material.dispose();
+        }
+        patches = null;
+    }
+}
+
 export function refreshTerrain() {
     _ensurePatches();
     for (const p of patches) recomputePatch(p);

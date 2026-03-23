@@ -62,6 +62,7 @@ function createBlock(x, z, size = 1.0, height = 4.0) {
 }
 
 export function initChaseRocks() {
+    if (!rockGroup.parent) scene.add(rockGroup);
     bushes.length = 0;
     collidables.length = 0;
     while(rockGroup.children.length > 0) {

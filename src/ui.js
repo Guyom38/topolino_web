@@ -1,5 +1,4 @@
 // ── HUD principal : visages joueurs + QR code + debug caméra ─────────────────
-import { getCameraDebug } from './camera.js';
 
 let qrGenerated = false;
 
@@ -47,7 +46,6 @@ export function updateUI(players) {
     const now = performance.now();
     _updateFPS();
     _updatePlayerCards(players);
-    _updateCamDebug();
     _updateWaiting(players);
     for (const p of players.values()) {
         if (p.girophare) p.girophare.update(now);
@@ -265,10 +263,3 @@ export function setPlayerScore(playerId, value) {
     if (el) el.scoreEl.textContent = value;
 }
 
-// ── Debug caméra ─────────────────────────────────────────────────────────────
-function _updateCamDebug() {
-    const dbg = document.getElementById('cam-debug');
-    if (!dbg) return;
-    const c = getCameraDebug();
-    dbg.textContent = `PHI ${c.phi}°  THETA ${c.theta}°  R ${c.radius}`;
-}
