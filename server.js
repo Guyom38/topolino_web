@@ -4,7 +4,7 @@ const path = require('path');
 const bodyParser = require('body-parser');
 
 const app = express();
-const PORT = 5000;
+const PORT = 8090;
 
 // Augmenter la limite pour les images en Base64
 app.use(bodyParser.json({ limit: '50mb' }));

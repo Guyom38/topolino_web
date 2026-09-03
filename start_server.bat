@@ -56,11 +56,15 @@ if %ERRORLEVEL% NEQ 0 (
     echo.
 )
 
+:: Detecter HTTPS (cert.pem/key.pem presents = le serveur demarre en HTTPS)
+set PROTOCOL=http
+if exist cert.pem if exist key.pem set PROTOCOL=https
+
 :: Lancer le navigateur apres 2 secondes
-start /b "" cmd /c "timeout /t 2 /nobreak >nul && start http://localhost:5000"
+start /b "" cmd /c "timeout /t 2 /nobreak >nul && start %PROTOCOL%://localhost:8090"
 
 echo  [OK] Serveur en cours de demarrage...
-echo  [>>] Adresse locale : http://localhost:5000
+echo  [>>] Adresse locale : %PROTOCOL%://localhost:8090
 echo  [>>] Mobile/TV      : voir le QR code dans le jeu
 echo.
 echo  (Fermez cette fenetre pour arreter le serveur)
@@ -74,6 +78,6 @@ echo.
 echo.
 color 0E
 echo  [INFO] Le serveur s'est arrete.
-echo  Verifiez que le port 5000 n'est pas deja utilise.
+echo  Verifiez que le port 8090 n'est pas deja utilise.
 echo.
 pause

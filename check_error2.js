@@ -8,7 +8,7 @@ const puppeteer = require('puppeteer');
     page.on('pageerror', err => console.log('PAGE ERROR:', err));
 
     try {
-        await page.goto('http://localhost:5000/');
+        await page.goto('http://localhost:8090/');
         // trigger keydown to move
         await page.keyboard.down('ArrowUp');
         await new Promise(r => setTimeout(r, 2000));

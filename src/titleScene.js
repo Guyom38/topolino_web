@@ -1227,15 +1227,30 @@ export async function initTitleScene() {
     // ── Smartphone via socket.io ──────────────────────────────────────────────
     if (typeof io !== 'undefined') {
         _titleSock = io(window.location.origin);
+        _titleSock.on('connect', () => _titleSock.emit('register_display'));
+        _titleSock.on('player_list', (list) => {
+            list.forEach(d => {
+                if (_titlePlayerCars.has(d.player_id)) return;
+                const keys = { left: false, right: false, up: false, down: false };
+                _claimCar(d.player_id, d.name || `Joueur ${_titlePlayerCars.size + 1}`,
+                          d.color || _nextPlayerColor(), keys);
+            });
+        });
         _titleSock.on('player_joined', (data) => {
-            if (_titlePlayerCars.has(data.id)) return;
+            if (_titlePlayerCars.has(data.player_id)) return;
             const keys = { left: false, right: false, up: false, down: false };
-            _claimCar(data.id, data.name || `Joueur ${_titlePlayerCars.size + 1}`,
+            _claimCar(data.player_id, data.name || `Joueur ${_titlePlayerCars.size + 1}`,
                       data.color || _nextPlayerColor(), keys);
         });
         _titleSock.on('player_input', (data) => {
-            const entry = _titlePlayerCars.get(data.id);
-            if (entry) Object.assign(entry.keys, data);
+            const entry = _titlePlayerCars.get(data.player_id);
+            if (!entry) return;
+            const inp = data.inputs || {};
+            const DZ  = 0.12;
+            entry.keys.left  = inp.jx < -DZ;
+            entry.keys.right = inp.jx >  DZ;
+            entry.keys.up    = inp.jy < -DZ;
+            entry.keys.down  = inp.jy >  DZ;
         });
     }
 

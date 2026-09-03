@@ -25,3 +25,7 @@ Thumbs.db
 
 # Fichiers temporaires
 *.tmp
+
+# Certificats HTTPS locaux (contiennent des clés privées)
+*.pem
+*.pem.disabled

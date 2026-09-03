@@ -344,6 +344,28 @@ html,body{width:100%;height:100%;overflow:hidden;background:#090b12;color:#fff}
 #conn-dot{width:7px;height:7px;border-radius:50%;background:#883333;box-shadow:0 0 5px #883333;transition:background .3s,box-shadow .3s}
 #conn-dot.ok{background:#33cc77;box-shadow:0 0 8px #33cc77}
 #conn-label{font-family:'Bebas Neue',Impact,sans-serif;font-size:8px;letter-spacing:2px;opacity:0.4}
+#btn-fs-landscape{
+  background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);
+  border-radius:8px;padding:4px 8px;color:#fff;cursor:pointer;
+  font-size:14px;touch-action:manipulation;line-height:1;opacity:0.7;
+}
+#btn-fs-landscape:active{background:rgba(255,255,255,0.18)}
+
+/* ── Verrou "rejoindre avant de jouer" (paysage) ── */
+#landscape-lock{
+  position:absolute;inset:0;z-index:50;display:none;
+  flex-direction:column;align-items:center;justify-content:center;gap:14px;
+  padding:20px;text-align:center;pointer-events:none;
+  background:rgba(9,11,18,0.62);backdrop-filter:blur(4px);
+}
+#landscape-lock-icon{font-size:34px;filter:drop-shadow(0 0 10px rgba(255,140,0,.5))}
+#landscape-lock-text{
+  font-family:'Bebas Neue',Impact,sans-serif;font-size:15px;letter-spacing:2px;
+  line-height:1.5;color:#fff;
+  text-shadow:0 2px 8px rgba(0,0,0,.8);
+  max-width:260px;
+}
+#landscape-lock-text b{color:#ffaa00}
 </style>
 </head>
 <body>
@@ -437,6 +459,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#090b12;color:#fff}
       <div id="conn-dot"></div>
       <span id="conn-label">HORS LIGNE</span>
     </div>
+    <button id="btn-fs-landscape" title="Plein écran">⛶</button>
   </div>
 
   <div class="js-zone" id="js-right-zone">
@@ -446,6 +469,11 @@ html,body{width:100%;height:100%;overflow:hidden;background:#090b12;color:#fff}
       <div class="js-arrows js-arrows-tb"><span>▲</span><span>▼</span></div>
       <div id="js-right-thumb" class="js-thumb"></div>
     </div>
+  </div>
+
+  <div id="landscape-lock">
+    <div id="landscape-lock-icon">🔄📱</div>
+    <div id="landscape-lock-text">TOURNEZ VOTRE TÉLÉPHONE EN <b>PORTRAIT</b><br>ET <b>REJOIGNEZ LA PARTIE</b><br>POUR ACCÉDER AU CONTRÔLEUR</div>
   </div>
 
 </div>
@@ -828,13 +856,15 @@ reverseRow.addEventListener('click', toggleReverse);
 // ════════════════════════════════════════════════════════════════
 // PLEIN ÉCRAN
 // ════════════════════════════════════════════════════════════════
-tap('btn-fs', () => {
+function toggleFullscreen() {
   const el = document.documentElement;
   if (document.fullscreenElement || document.webkitFullscreenElement)
     (document.exitFullscreen || document.webkitExitFullscreen || (()=>{})).call(document);
   else
     (el.requestFullscreen || el.webkitRequestFullscreen || (()=>{})).call(el);
-});
+}
+tap('btn-fs', toggleFullscreen);
+tap('btn-fs-landscape', toggleFullscreen);
 
 // ════════════════════════════════════════════════════════════════
 // SAUVEGARDE NOM EN DIRECT
@@ -849,6 +879,12 @@ document.getElementById('inp-name').addEventListener('input', () => {
 // SOCKET.IO + CONNEXION
 // ════════════════════════════════════════════════════════════════
 let sock = null, joined = false;
+
+const landscapeLock = document.getElementById('landscape-lock');
+function updateLandscapeLock() {
+  landscapeLock.style.display = joined ? 'none' : 'flex';
+}
+updateLandscapeLock();
 
 function joinGame() {
   const playerName = (document.getElementById('inp-name').value.trim() || 'JOUEUR').toUpperCase();
@@ -874,6 +910,7 @@ function joinGame() {
     document.getElementById('conn-dot').classList.add('ok');
     document.getElementById('conn-label').textContent = 'EN LIGNE';
     startHB();
+    updateLandscapeLock();
   });
   sock.on('game_full', () => { status.textContent = '❌ PARTIE COMPLÈTE'; });
   sock.on('disconnect', () => {
@@ -881,6 +918,7 @@ function joinGame() {
     document.getElementById('conn-dot').classList.remove('ok');
     document.getElementById('conn-label').textContent = 'DÉCONNECTÉ';
     stopHB();
+    updateLandscapeLock();
   });
 }
 
@@ -979,10 +1017,10 @@ function makeJoystick(baseEl, thumbEl, onUpdate) {
 }
 
 makeJoystick(document.getElementById('js-left-base'),  document.getElementById('js-left-thumb'),
-  (_, y) => { rightJy = y; });
+  (x, _) => { leftJx  = x; });
 
 makeJoystick(document.getElementById('js-right-base'), document.getElementById('js-right-thumb'),
-  (x, _) => { leftJx  = x; });
+  (_, y) => { rightJy = y; });
 
 window.addEventListener('orientationchange', () => {
   leftJx = 0; rightJy = 0;

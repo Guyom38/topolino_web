@@ -116,14 +116,14 @@ echo  1. Relancez start_server.bat
 echo     Le serveur demarrera en HTTPS automatiquement.
 echo.
 echo  2. Acces depuis le PC :
-echo     https://localhost:5000
+echo     https://localhost:8090
 echo     (acceptez l'avertissement de securite)
 echo.
 echo  3. Acces depuis iPhone (pour la camera) :
-echo     https://%LOCAL_IP%:5000
+echo     https://%LOCAL_IP%:8090
 echo.
 echo  4. Pour faire confiance au certificat sur iPhone :
-echo     a) Ouvrez https://%LOCAL_IP%:5000 dans Safari
+echo     a) Ouvrez https://%LOCAL_IP%:8090 dans Safari
 echo     b) Tapez "Avance" puis "Continuer vers le site"
 echo     OU installez le certificat comme profil :
 echo     a) Envoyez cert.pem sur votre iPhone (AirDrop/Mail)

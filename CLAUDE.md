@@ -4,21 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Topolino is a browser-based 3D car game built with Three.js. A Fiat Topolino FBX model drives on an infinite road with drift physics, tire tracks, and an orbital camera. No build system — pure ES modules loaded via CDN importmap.
+Topolino is a browser-based 3D car game built with Three.js. A Fiat Topolino FBX model drives on an infinite road with drift physics, tire tracks, and an orbital camera. The 3D rendering is pure ES modules loaded via CDN importmap (no build system). The game also has a multiplayer mode backed by a Flask + SocketIO server: remote players join as mobile controllers by scanning a QR code shown on the main screen.
 
 ## Running the Project
 
 ```bash
-# Option 1: Node.js
-npx serve -l 3000
-
-# Option 2: Python
-python -m http.server 8000
-
-# Option 3: use start_server.bat (tries Node then Python)
+# Primary: launches the Flask/SocketIO multiplayer server (installs deps on first run)
+start_server.bat
+# or directly:
+python server.py
 ```
 
-The game must be served over HTTP (not file://) because ES modules and FBX loading require it.
+This serves the game on **http://localhost:8090**. The game must be served over HTTP (not file://) because ES modules and FBX loading require it.
+
+`server.js` (Express) is a legacy/unused alternative server — do not use it for the multiplayer flow.
 
 ## Architecture
 
@@ -34,8 +33,18 @@ All game logic lives in `src/` as ES modules. `index.html` is a minimal shell th
 - `car.js` — FBX loading, calls `getMaterialForMesh()` per mesh, detects wheels by name containing `roue`
 - `physics.js` — bicycle model steering, grip/drift with quadratic corner factor, visual body roll on `state.carVisual`
 - `tracks.js` — emits 4 tire track stamps every N frames using a custom ShaderMaterial with procedural noise
+- `titleScene.js` — title screen, renders the QR code (fetched from `/api/info`) players scan to join as a mobile controller. Also selects among the 8 game modes: `drive`, `circuit`, `chase`, `parking`, `tron`, `derby`, `battle`, `foot`
+- `multiplayer.js` — SocketIO client bridge (`register_display`), tracks remote players, and reads local USB gamepads (up to 8) independently of the network
 
-**Three.js is loaded via CDN** (v0.160.0) through an importmap in `index.html`. There is no `package.json` or `node_modules`.
+**Three.js is loaded via CDN** (v0.160.0) through an importmap in `index.html`.
+
+## Multiplayer Server
+
+`server.py` is the active backend (Flask + flask-socketio, `gevent` async mode), listening on port **8090**. Routes: `/` (main display), `/mobile` (phone controller UI), `/api/info` (returns local IP for the QR code URL). Key SocketIO events: `register_display`, `register_mobile`, `input`, `player_photos`, `config_update`, `change_mode`, `heartbeat`/inactivity cleanup.
+
+If `cert.pem`/`key.pem` exist in the project root, the server switches to HTTPS automatically — required for `getUserMedia()` camera access on iPhone Safari. Generate them with `generate_https.bat`.
+
+**Legacy/unused, do not extend:** `server.js` (Express upload server) and `controller.html` (an older mobile-controller variant with camera/face-scan features). The active mobile controller is `mobile.html`.
 
 ## Assets
 
